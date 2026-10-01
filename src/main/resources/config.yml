@@ -1,0 +1,61 @@
+# Atlas configuration. Keep this file identical on EU and NA except server.region,
+# server.proxy-names (if they differ) and the database credentials.
+server:
+  # Postbox region of this server: EU or NA. Must equal Postbox's own setting.
+  region: "EU"
+  # Velocity server name of each region, used by cross-server portals.
+  proxy-names:
+    EU: "survival"
+    NA: "survival-na"
+database:
+  host: "127.0.0.1"
+  port: 3306
+  name: "pixelretreat_veyra"
+  username: ""
+  password: ""
+  ssl-mode: "disable"
+datapack:
+  # Data pack format of the running Minecraft version (26.3: 121).
+  pack-format: 121
+teleport:
+  # Blocks around a world spawn searched for a safe landing spot.
+  safe-search-radius: 16
+portals:
+  # Cooldown for new portals, in milliseconds.
+  default-cooldown-millis: 2500
+  # How long a cross-server travel ticket stays valid.
+  travel-ticket-minutes: 5
+  # Largest portal volume that may be filled with blocks.
+  max-fill-blocks: 4096
+keep-loaded:
+  # Largest number of chunks one keep-loaded region may cover.
+  max-chunks-per-region: 1024
+# Flag values for worlds that do not override them.
+default-flags:
+  hostile-mobs: true
+  friendly-mobs: true
+  plugin-hostile-mobs: true
+  plugin-friendly-mobs: true
+  tnt-damage: true
+  crystal-damage: true
+  fire-damage: true
+  explosion-damage: true
+  pvp: true
+  fall-damage: true
+  hunger: true
+  drowning: true
+  block-break: true
+  block-place: true
+  leaf-decay: true
+  crop-trampling: true
+  item-drop: true
+  item-pickup: true
+  weather: true
+  time-cycle: true
+  time-skip: true
+  mob-griefing: true
+  keep-inventory: false
+  portals: true
+workers:
+  threads: 4
+  queue-size: 256

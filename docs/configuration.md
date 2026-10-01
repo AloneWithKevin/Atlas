@@ -1,0 +1,50 @@
+# Configuration
+
+`plugins/Atlas/config.yml` is read once at startup; every key is required and an invalid value
+stops Atlas. Keep it identical on EU and NA apart from `server.region` and the credentials. The
+distributed file has an empty username and password; fill them in on the server only.
+
+| Key | Meaning |
+| --- | --- |
+| `server.region` | `EU` or `NA`. Must equal Postbox's region; all Atlas rows are stored under it. |
+| `server.proxy-names.EU`, `.NA` | Velocity server names used by cross-server portals. |
+| `database.host`, `port`, `name`, `username`, `password`, `ssl-mode` | Shared MariaDB connection (`pixelretreat_veyra`). `ssl-mode`: `disable`, `trust`, `verify-ca` or `verify-full`. |
+| `datapack.pack-format` | Data pack format of the running Minecraft version (121 for 26.3). |
+| `teleport.safe-search-radius` | Blocks (0–64) around a vanilla spawn searched for a safe landing spot. |
+| `portals.default-cooldown-millis` | Cooldown of new portals (0–600000). |
+| `portals.travel-ticket-minutes` | Validity of a cross-server travel ticket (1–60). |
+| `portals.max-fill-blocks` | Largest portal volume that may be filled (1–65536). |
+| `keep-loaded.max-chunks-per-region` | Largest keep-loaded region (1–65536 chunks). |
+| `default-flags.<flag>` | Value of each flag in worlds that do not override it. |
+| `workers.threads`, `workers.queue-size` | Bounded database/file workers (1–16 threads, queue 1–4096). |
+
+## Flags
+
+| Flag | Default | When off |
+| --- | --- | --- |
+| `hostile-mobs` | on | Hostile creatures do not appear through any game mechanic (natural, spawner, egg, breeding, `/summon`, …). |
+| `friendly-mobs` | on | The same for animals, ambient and water creatures, villagers and golems. |
+| `plugin-hostile-mobs` | on | Hostile creatures spawned by plugins (spawn reason `CUSTOM`) are refused. |
+| `plugin-friendly-mobs` | on | The same for friendly creatures spawned by plugins. |
+| `tnt-damage` / `crystal-damage` | on | TNT (and TNT minecarts) / end crystals neither damage entities nor break blocks. |
+| `explosion-damage` | on | No explosion damages entities or breaks blocks. |
+| `fire-damage` | on | No fire, lava, campfire or magma damage, no burning, igniting or fire spread. |
+| `pvp` | on | Players cannot hurt players directly or with projectiles. |
+| `fall-damage`, `drowning` | on | No fall / drowning damage for any entity. |
+| `hunger` | on | Players' food level does not drop. |
+| `block-break`, `block-place` | on | Breaking / placing blocks is refused. |
+| `leaf-decay`, `crop-trampling` | on | Leaves do not decay / farmland is not trampled. |
+| `item-drop`, `item-pickup` | on | Players cannot drop / pick up items. |
+| `weather` | on | The weather stays as set (clear if nothing is set). |
+| `time-cycle` | on | The clock stops. |
+| `time-skip` | on | Sleeping cannot skip the night. |
+| `mob-griefing` | on | The `mobGriefing` game rule is off. |
+| `keep-inventory` | off | (When on) the `keepInventory` game rule is on. |
+| `portals` | on | Atlas portals in this world do nothing. |
+
+## Files Atlas writes
+
+- `<level>/datapacks/atlas/`: `pack.mcmeta` and one `data/atlas/dimension/<name>.json` per enabled
+  Atlas world. Generated from MariaDB; do not edit by hand.
+- `<level>/dimensions/atlas/<name>/`: Atlas world folders, written by Minecraft. Atlas copies or
+  deletes them only during startup, for queued operations.

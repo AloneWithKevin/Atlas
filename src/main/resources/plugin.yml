@@ -1,0 +1,24 @@
+name: Atlas
+version: '${version}'
+main: nl.pixelretreat.atlas.AtlasPlugin
+api-version: '26.3'
+folia-supported: true
+author: PixelRetreat
+description: Worlds, world rules, portals and keep-loaded regions
+depend: [Postbox, Campfire, Closet]
+commands:
+  atlas:
+    description: Manage worlds, world rules, portals and keep-loaded regions.
+    usage: /atlas help
+permissions:
+  atlas.admin:
+    description: Use every Atlas management command and the Atlas selector.
+    default: op
+    children:
+      atlas.gamemode.bypass: true
+  atlas.portal.use:
+    description: Travel through Atlas portals.
+    default: true
+  atlas.gamemode.bypass:
+    description: Keep your own game mode in worlds with a forced game mode.
+    default: op

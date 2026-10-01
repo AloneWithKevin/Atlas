@@ -1,0 +1,10 @@
+schema: 1
+items:
+  atlas:selector:
+    category: atlas
+    material: WOODEN_AXE
+    max-stack-size: 1
+    unbreakable: true
+    name-key: items.selector.name
+    lore:
+      - items.selector.lore
