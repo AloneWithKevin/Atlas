@@ -73,7 +73,7 @@ world:
     already-disabled: "<#F3E5AB><world></#F3E5AB> is already disabled."
     not-found: "Nothing was found for <#F3E5AB><world></#F3E5AB>."
 info:
-  header: "<#F3E5AB>World <world></#F3E5AB>"
+  header: "World <world>"
   state: "Loaded: <loaded> · Enabled: <enabled> · Generator: <generator> · Players: <players>"
   settings: "Difficulty: <difficulty> · Game mode: <gamemode> · Fixed time: <time> · Weather: <weather> · Spawn: <spawn> · Reset source: <source>"
   # <flags>: key=value pairs; * marks an override of the default

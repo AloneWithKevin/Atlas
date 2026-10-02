@@ -8,6 +8,7 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -152,14 +153,43 @@ public final class AtlasPlugin extends JavaPlugin {
         });
     }
 
+    /** How many times Atlas waits for a network contract before giving up, and the gap in ticks. */
+    private static final int CONTRACT_ATTEMPTS = 60;
+    private static final long CONTRACT_INTERVAL_TICKS = 20L;
+
     private void connect(AtlasConfig settings, RulesService rules) {
-        if (stopped.get()) return;
+        connect(settings, rules, 0);
+    }
+
+    /**
+     * Waits for Postbox, Campfire and Closet to publish their contracts. They register during their own
+     * asynchronous start, which happens after Atlas enables, so this retries with a bounded wait and
+     * reports which contract never arrived. A region mismatch is a configuration error and fails at once.
+     *
+     * @param settings the plugin settings
+     * @param rules    the world rules service
+     * @param attempt  how many tries have happened
+     */
+    private void connect(AtlasConfig settings, RulesService rules, int attempt) {
+        if (stopped.get() || !isEnabled()) return;
         VeyraCluster link = getServer().getServicesManager().load(VeyraCluster.class);
         CampfireMessages messages = getServer().getServicesManager().load(CampfireMessages.class);
         ClosetService items = getServer().getServicesManager().load(ClosetService.class);
-        if (link == null || !link.isEnabled() || link.localNode().isEmpty()
-                || !link.localNode().get().name().equalsIgnoreCase(settings.region()) || messages == null || items == null) {
-            fail(new IllegalStateException("Postbox, Campfire or Closet contract unavailable"));
+        if (link != null && link.isEnabled() && link.localNode().isPresent()
+                && !link.localNode().get().name().equalsIgnoreCase(settings.region())) {
+            fail(new IllegalStateException("Postbox is " + link.localNode().get().name()
+                + " but Atlas expects " + settings.region()));
+            return;
+        }
+        String late = lateContracts(link, messages, items);
+        if (late != null) {
+            if (attempt >= CONTRACT_ATTEMPTS) {
+                fail(new IllegalStateException("Missing network contracts after "
+                    + (CONTRACT_ATTEMPTS * CONTRACT_INTERVAL_TICKS / 20) + "s: " + late));
+                return;
+            }
+            getServer().getGlobalRegionScheduler().runDelayed(this,
+                task -> connect(settings, rules, attempt + 1), CONTRACT_INTERVAL_TICKS);
             return;
         }
         campfire = messages;
@@ -179,6 +209,17 @@ public final class AtlasPlugin extends JavaPlugin {
                     if (failure != null) { fail(failure); return; }
                     getServer().getGlobalRegionScheduler().run(this, task -> install(settings, rules, 0));
                 });
+    }
+
+    /** Names the contracts that have not been published yet, or null when all of them are ready. */
+    private static String lateContracts(VeyraCluster link, CampfireMessages messages, ClosetService items) {
+        List<String> late = new ArrayList<>();
+        if (link == null) late.add("Postbox cluster link");
+        else if (!link.isEnabled()) late.add("Postbox cluster link (not enabled)");
+        else if (link.localNode().isEmpty()) late.add("Postbox local node");
+        if (messages == null) late.add("Campfire messages");
+        if (items == null) late.add("Closet service");
+        return late.isEmpty() ? null : String.join(", ", late);
     }
 
     private void install(AtlasConfig settings, RulesService rules, int attempt) {
