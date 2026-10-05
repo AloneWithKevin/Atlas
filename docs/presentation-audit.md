@@ -1,6 +1,6 @@
 # Message and interface audit
 
-Reviewed on 2026-10-05 for Atlas 0.1.2 against the message and item palettes in the
+Reviewed on 2026-10-05 for Atlas 0.1.2/0.1.3 against the message and item palettes in the
 current Veyra plugin standards, sections 11 and 12.
 
 ## Legacy interfaces and assets
@@ -22,7 +22,7 @@ database-backed presentation path.
 | Selection tool | Vanilla wooden axe, PDC identity, hardcoded name/lore | `atlas:selector` Closet definition with Campfire name/lore keys |
 | Menus/submenus, pages, buttons, inventory input/confirmation screens | None | None required |
 | Actionbars, bossbars, titles, hover text | None | None |
-| Menu backgrounds, custom selector model/texture, fonts/glyphs, sound assets | None referenced or bundled | None required |
+| Menu backgrounds, custom selector model/texture, fonts/glyphs, sound assets | None referenced or bundled | No legacy art missing; 0.1.3 adds one action-lore glyph |
 
 The existing PixelWorlds distribution JAR was inspected as well: 33 owned class entries,
 no inventory-menu/display/custom-model references and no asset entries. The selector
@@ -33,7 +33,7 @@ and installed VeyraTest01 Closet content were reconciled with those references. 
 PixelWorlds/Atlas artwork or content definitions were found. The historical Survivaleu01
 PixelItems directories are no longer present; their previously captured content remains
 in the Closet baseline. No missing GUI needs a Compass conversion, and this change adds
-no shared Compass/Closet files, custom art, glyphs or resource-pack output.
+no shared Compass/Closet files, custom art, glyphs or resource-pack output in 0.1.2.
 The compile/test dependency now points to the available Closet 0.1.4 API/runtime
 artifacts. The older 0.1.2 files are no longer present in the workspace. Atlas's existing
 registration, identity and selector-grant contracts are preserved and validated against
@@ -64,12 +64,43 @@ Tests render through the real Campfire catalog, inspect effective colors, detect
 bleeding and verify literal input cannot create click/hover events. The selector still
 passes real Closet contribution validation. See [verification](verification.md).
 
+## Small lore glyph follow-up, 0.1.3
+
+The owner's 2026-10-05 clarification requires the plugin to implement the small icons
+in its existing lore itself. Atlas has exactly one such surface: the selector's existing
+action line. It now begins with `atlas:lore/action`, U+E000 in the private `atlas:lore`
+font. No new lore line, screen, label or gameplay feature is introduced. The earlier
+text/layout preservation requirement is reconciled by adding only this glyph and its
+following space; every existing word and the two-space action separator remain exact.
+
+The 16x16 transparent green action marker reuses the preserved Scrapbook action bitmap
+byte-for-byte, under an Atlas-owned asset path. It has the same generic action meaning;
+there is no new drawing or modification of the original asset. Display height 8 and
+ascent 7 match the existing mini-glyph style. The character is explicitly white to
+preserve its authored green pixels; click text remains green and corner values white.
+Only the character uses the custom font.
+
+`closet.yml` registers the item, glyph and external `content/` atomically through the
+existing asynchronous Closet startup stage. Both font JSON and texture automatically
+enter Closet's required pack inputs and catalog; no central provider file or font slot
+is changed. Missing content fails registration before dependent Atlas actions enable.
+The authoring assets remain outside compilation output and the JAR. See
+[external content](../content/README.md) for the separate installation contract.
+
+All 41 tests pass, including actual Closet registry/catalog/pack-input publication,
+real Campfire rendering, bitmap dimensions/transparency/font reference checks and
+font/color confinement. The 104-key catalog is unchanged except for that action glyph
+prefix relative to 0.1.2. All 54 runtime classes and the API JAR remain identical to
+verified 0.1.1. No extra permission or database schema exists.
+
 ## Release and owner check
 
-Atlas 0.1.2 is a source/build release. The previously staged Atlas 0.1.1 JAR and installed
-message file have not been replaced by this audit. Applying the updated messages and JAR
-requires a separately authorized deployment. No new permissions or schema changes exist.
+Atlas 0.1.3 is a source/build release. Installed Atlas 0.1.1 and its messages have not
+been replaced by these audits. Applying the updated messages, manifest, external
+content and JAR requires separately authorized deployment and a matching Closet pack
+release. No deployment, live pack publication or server restart occurred here.
 
 After that release, the owner checks help/usage, world/portal/region information, selection
-confirmations, selector tooltip, error/success messages and normal portal travel in game.
+confirmations, selector tooltip including its mini-glyph, error/success messages and
+normal portal travel in game.
 Technical rendering tests do not establish client or in-game acceptance.

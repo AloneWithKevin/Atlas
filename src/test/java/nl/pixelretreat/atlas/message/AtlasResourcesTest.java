@@ -12,6 +12,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import javax.imageio.ImageIO;
+import dev.veyra.api.VeyraCluster;
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.TextColor;
@@ -21,9 +27,14 @@ import nl.pixelretreat.atlas.config.AtlasConfig;
 import nl.pixelretreat.campfire.catalog.CatalogLifetime;
 import nl.pixelretreat.campfire.catalog.LoadedMessageCatalog;
 import nl.pixelretreat.campfire.catalog.MessageFileLoader;
+import nl.pixelretreat.campfire.api.CampfireLocalization;
+import nl.pixelretreat.campfire.api.CampfireRuntime;
 import nl.pixelretreat.campfire.localization.DefaultCampfireLocalization;
 import nl.pixelretreat.closet.config.ContributionYaml;
 import nl.pixelretreat.closet.service.ContributionValidator;
+import nl.pixelretreat.closet.service.DefaultClosetService;
+import nl.pixelretreat.closet.api.ContentContribution;
+import nl.pixelretreat.closet.api.ItemId;
 import org.bukkit.Material;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.Plugin;
@@ -60,7 +71,30 @@ class AtlasResourcesTest {
             var catalog = localization.register(owner).toCompletableFuture().get();
             var contribution = new ContributionYaml().load(directory);
             assertEquals(1, contribution.items().size());
-            new ContributionValidator().validate(contribution, directory, catalog);
+            assertEquals(directory.resolve("content"), contribution.assetsRoot());
+            // External authoring content is read directly, never copied into build output.
+            Path ownerRoot = Path.of(".").toAbsolutePath().normalize();
+            var external = new ContentContribution(contribution.items(), contribution.glyphs(), ownerRoot.resolve("content"));
+            var assets = new ContributionValidator().validate(external, ownerRoot, catalog);
+            assertEquals(Set.of("assets/atlas/font/lore.json",
+                    "assets/pixelretreat/textures/gui/atlas_lore/action.png"), assets.sha256().keySet());
+            var localizationApi = mock(CampfireLocalization.class);
+            when(localizationApi.register(owner)).thenReturn(CompletableFuture.completedFuture(catalog));
+            var runtime = mock(CampfireRuntime.class);
+            when(runtime.localization()).thenReturn(localizationApi);
+            when(owner.getDataFolder()).thenReturn(ownerRoot.toFile());
+            var provider = mock(Plugin.class);
+            when(provider.isEnabled()).thenReturn(true);
+            try (var worker = Executors.newSingleThreadExecutor();
+                 var service = new DefaultClosetService(provider, mock(VeyraCluster.class), runtime, worker)) {
+                assertTrue(service.register(owner, external).toCompletableFuture().get(5, TimeUnit.SECONDS).active());
+                assertTrue(service.catalog().items().containsKey(ItemId.parse("atlas:selector")));
+                assertEquals(1, service.catalog().glyphs().size());
+                assertEquals(Key.key("atlas:lore"), service.glyph(ItemId.parse("atlas:lore/action")).font());
+                assertEquals("\uE000", PlainTextComponentSerializer.plainText().serialize(
+                        service.glyph(ItemId.parse("atlas:lore/action"))));
+                assertEquals(assets.sha256(), service.packInputs().get("atlas").sha256());
+            }
         }
     }
 
@@ -117,8 +151,36 @@ class AtlasResourcesTest {
         for (String value : List.of("corner 1", "corner 2")) {
             assertColor(lore, value, TextColor.color(0xFFFFFF));
         }
-        assertEquals("Left-click: corner 1  Right-click: corner 2",
+        assertEquals("\uE000 Left-click: corner 1  Right-click: corner 2",
                 PlainTextComponentSerializer.plainText().serialize(lore));
+    }
+
+    @Test void selectorGlyphUsesExternalBitmapAndDoesNotChangeTextFont() throws Exception {
+        Path content = Path.of("content");
+        var image = ImageIO.read(content.resolve("assets/pixelretreat/textures/gui/atlas_lore/action.png").toFile());
+        assertEquals(16, image.getWidth());
+        assertEquals(16, image.getHeight());
+        assertTrue(image.getColorModel().hasAlpha());
+        assertEquals(0, image.getRGB(0, 0) >>> 24);
+        var font = new org.yaml.snakeyaml.Yaml().loadAs(Files.readString(content.resolve("assets/atlas/font/lore.json")), Map.class);
+        var bitmap = (Map<?, ?>) ((List<?>) font.get("providers")).getFirst();
+        assertEquals("bitmap", bitmap.get("type"));
+        assertEquals("pixelretreat:gui/atlas_lore/action.png", bitmap.get("file"));
+        assertEquals(8, bitmap.get("height"));
+        assertEquals(7, bitmap.get("ascent"));
+        assertEquals(List.of("\uE000"), bitmap.get("chars"));
+        var lore = catalog().get("items.selector.lore");
+        assertColor(lore, "\uE000", TextColor.color(0xFFFFFF));
+        assertFonts(lore, null);
+    }
+
+    private void assertFonts(Component component, Key inherited) {
+        Key font = component.font() == null ? inherited : component.font();
+        if (component instanceof TextComponent text && !text.content().isEmpty()) {
+            assertEquals(text.content().equals("\uE000") ? Key.key("atlas:lore") : null, font,
+                    "The custom font must stay confined to the glyph");
+        }
+        for (Component child : component.children()) assertFonts(child, font);
     }
 
     private LoadedMessageCatalog catalog() throws Exception {

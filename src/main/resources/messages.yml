@@ -140,4 +140,4 @@ reload:
 items:
   selector:
     name: "<white>Atlas Selector</white>"
-    lore: "<#A8D5A2>Left-click:</#A8D5A2> <white>corner 1</white>  <#A8D5A2>Right-click:</#A8D5A2> <white>corner 2</white>"
+    lore: "<white><font:atlas:lore></font></white> <#A8D5A2>Left-click:</#A8D5A2> <white>corner 1</white>  <#A8D5A2>Right-click:</#A8D5A2> <white>corner 2</white>"
