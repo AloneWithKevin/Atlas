@@ -4,6 +4,9 @@
 stops Atlas. Keep it identical on EU and NA apart from `server.region` and the credentials. The
 distributed file has an empty username and password; fill them in on the server only.
 
+For an existing installation, add `default-flags.trading: true` before this version starts. A
+missing key stops Atlas; there is no migration, fallback or guessed default.
+
 | Key | Meaning |
 | --- | --- |
 | `server.region` | `EU` or `NA`. Must equal Postbox's region; all Atlas rows are stored under it. |
@@ -17,6 +20,14 @@ distributed file has an empty username and password; fill them in on the server 
 | `keep-loaded.max-chunks-per-region` | Largest keep-loaded region (1–65536 chunks). |
 | `default-flags.<flag>` | Value of each flag in worlds that do not override it. |
 | `workers.threads`, `workers.queue-size` | Bounded database/file workers (1–16 threads, queue 1–4096). |
+
+## Messages and item text
+
+`messages.yml` contains every chat/console and selector name/lore key. Chat uses Campfire's
+ordinary-text default, `#F3E5AB` for subjects/labels and `#A8D5A2` for actions. Selector
+name/values are white and click instructions use `#A8D5A2`. Atlas 0.1.2 changes colors only;
+existing keys, English wording and line layout are preserved. Custom installed messages
+need review during an authorized release; a new JAR does not overwrite them automatically.
 
 ## Flags
 
@@ -41,6 +52,7 @@ distributed file has an empty username and password; fill them in on the server 
 | `mob-griefing` | on | The `mobGriefing` game rule is off. |
 | `keep-inventory` | off | (When on) the `keepInventory` game rule is on. |
 | `portals` | on | Atlas portals in this world do nothing. |
+| `trading` | on | Player-to-player trades through Handshake are refused in this world. |
 
 ## Files Atlas writes
 

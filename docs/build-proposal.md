@@ -1,7 +1,9 @@
 # Atlas build proposal
 
 Status: scope discussion complete 2026-10-01 (all owner decisions recorded below and in the
-feature review). Implemented as Atlas 0.1.0 on 2026-10-01; see `parity.md` and `verification.md`.
+feature review). Implemented as Atlas 0.1.0 on 2026-10-01; 0.1.1 (2026-10-05) adds the `trading`
+world flag and redacts the database password in config diagnostics. See `parity.md` and
+`verification.md`.
 Atlas is the rewrite of PixelWorlds. Command `/atlas` only, without old aliases (approved).
 Implementation note: data packs are read before plugins load, so the data pack is written when
 staff change the world set; only folder work waits for `onLoad` (section 2 below is otherwise unchanged).
@@ -37,8 +39,8 @@ asks `Server#getGenerator(bukkitName)` for a plugin chunk generator.
 
 | Old | New | Effect |
 | --- | --- | --- |
-| create | `world create <name> <generator> [seed]` | Available after the next restart |
-| import | `world import <name>` | Adopts an existing folder in `dimensions/atlas/<name>` after restart |
+| create | `world create <name> <generator>` | Available after the next restart; data pack dimensions use the server seed |
+| import | `world import <name> <generator>` | Adopts an existing folder in `dimensions/atlas/<name>` after restart; the generator applies to chunks that do not exist yet |
 | load / auto-load | `world enable <name>` | Loaded from the next restart on |
 | unload | `world disable <name>` | Not loaded from the next restart on; players inside are moved to the overworld spawn by vanilla |
 | delete | `world delete <name> confirm` | Disabled and folder deleted at the next startup |
@@ -62,10 +64,13 @@ Flags (all on/off): the 20 old flags, plus
 | `plugin-friendly-mobs` | on | Plugin spawns of friendly mobs (decision 4) |
 | `portals` | on | Hard-coded "no portals in arena worlds" |
 | `time-skip` | on | Hard-coded cancelled sleeping in void/spawn worlds |
+| `trading` | on | New integration: player-to-player trading (Handshake) |
 
 Mob flags (decision 4): `hostile-mobs`/`friendly-mobs` block every spawn reason (natural, spawner,
-spawn egg, breeding, `/summon`, ...) except `CUSTOM`; `CUSTOM` (plugin spawns such as Nest,
-PixelMobs and Jar releases) is decided only by the two `plugin-*` flags.
+spawn egg, breeding, `/summon`, ...) except `CUSTOM`; `CUSTOM` (plugin spawns such as Jar releases
+and custom-mob plugins like PixelMobs) is decided only by the two `plugin-*` flags. Nest summons
+through vanilla creature spawners and their `CreatureSpawnEvent`/`SpawnerSpawnEvent` game reasons,
+so Nest spawns follow the normal `hostile-mobs`/`friendly-mobs` flags instead.
 
 Settings: difficulty, forced game mode (with staff bypass, decision 5), fixed time (ticks or off;
 replaces the pinned 6000 of void/spawn worlds), weather (clear/rain/thunder, optionally locked),
@@ -114,8 +119,8 @@ Command `/atlas`, no old aliases (pre-live rule).
 | `atlas.portal.<name>` | op | Using a portal marked restricted; registered at runtime per restricted portal |
 
 Subcommands: `world …` (section 2), `tp <world> [player]`, `spawn [world] [player]`,
-`setspawn [world]`, `info <world>`, `flag <world> <flag> <on|off>`,
-`set <world> <difficulty|gamemode|time|weather> <value> [lock]`, `portal …`, `keeploaded …`,
+`setspawn [world]`, `info <world>`, `flag <world> <flag> <on|off|default>`,
+`set <world> <difficulty|gamemode|time|weather> <value>`, `portal …`, `keeploaded …`,
 `selector`, `reload`, `help`. Tab completion shows only what the sender may use.
 
 ## 8. Data model (MariaDB, decision 7)
@@ -151,9 +156,14 @@ extra dimensions. Nothing to import.
 
 | Consumer | Contract |
 | --- | --- |
-| Jar (PixelCatch) | Typed Bukkit service `AtlasRules`: `allowsSpawn(World, EntityType, SpawnOrigin)` replaces `PixelWorldsApi.allowsCreatureSpawn`. |
-| Nest, PixelMobs | Their spawns count as plugin spawns (`plugin-*` flags). |
-| Colosseum | No runtime world creation/unload: per-match worlds are impossible; arenas must be worlds declared through Atlas and reset at startup, or a pool of loaded arenas. Recorded in PLUGIN_INTEGRATIONS.md. |
+| Jar (PixelCatch) | Typed Bukkit service `AtlasRules`: `allowsSpawn(World, EntityType, SpawnOrigin)` replaces `PixelWorldsApi.allowsCreatureSpawn`; a release checks `allowsSpawn(..., PLUGIN)` and its `CUSTOM` spawns follow the `plugin-*` flags. |
+| PixelMobs | Its `CUSTOM` spawns follow the `plugin-hostile-mobs`/`plugin-friendly-mobs` flags. |
+| Nest | Uses vanilla creature spawners and their `CreatureSpawnEvent`/`SpawnerSpawnEvent` game reasons, so its spawns follow the normal `hostile-mobs`/`friendly-mobs` flags. |
+| Handshake | Player-to-player trading: `AtlasRules.flagEnabled(world, AtlasFlag.TRADING)` with the `trading` flag, default on. |
+| Colosseum | No runtime world creation/unload (owner decision). The arena model still requires owner discussion: predeclared worlds with a startup reset, or a bounded pool of loaded arenas. |
+
+The per-consumer rows are tracked in `../../PLUGIN_INTEGRATIONS.md` (Atlas → Jar,
+Atlas → Nest/PixelMobs, Atlas → Handshake, Colosseum).
 
 ## 11. Tests
 

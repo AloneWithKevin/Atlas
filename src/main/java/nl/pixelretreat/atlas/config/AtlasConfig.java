@@ -70,6 +70,17 @@ public record AtlasConfig(
         }
     }
 
+    /** Diagnostics never include the database password. */
+    @Override public String toString() {
+        return "AtlasConfig[region=" + region + ", proxyNames=" + proxyNames + ", databaseHost=" + databaseHost
+                + ", databasePort=" + databasePort + ", databaseName=" + databaseName + ", databaseUsername="
+                + databaseUsername + ", databasePassword=***, databaseSslMode=" + databaseSslMode + ", packFormat="
+                + packFormat + ", safeSearchRadius=" + safeSearchRadius + ", defaultCooldownMillis="
+                + defaultCooldownMillis + ", travelTicketMinutes=" + travelTicketMinutes + ", maxFillBlocks="
+                + maxFillBlocks + ", maxChunksPerRegion=" + maxChunksPerRegion + ", defaultFlags=" + defaultFlags
+                + ", workerThreads=" + workerThreads + ", workerQueueSize=" + workerQueueSize + "]";
+    }
+
     /** The other Postbox region. */
     public String otherRegion() { return region.equals("EU") ? "NA" : "EU"; }
 }

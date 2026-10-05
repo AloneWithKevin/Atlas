@@ -17,7 +17,7 @@ Source inventory: `.research/atlas/feature-review.md` (PixelWorlds `4fd52b9`). O
 | 10 | `/pw spawn [world] [player]` | `/atlas spawn`. | Kept |
 | 11 | `/pw setspawn [world]` | `/atlas setspawn`; must be run in the world itself (the old command stored another world's coordinates). Stored spawn keeps its own direction. | Kept, fixed |
 | 12 | `/pw info` | `/atlas info` plus `/atlas world list`. Folder path no longer shown. | Kept |
-| 13 | 20 flags | Same 20 flags plus `plugin-hostile-mobs`, `plugin-friendly-mobs` (D4), `portals`, `time-skip` (D2); `default` removes an override. | Extended |
+| 13 | 20 flags | Same 20 flags plus `plugin-hostile-mobs`, `plugin-friendly-mobs` (D4), `portals`, `time-skip` (D2) and `trading` (Handshake integration, 0.1.1); `default` removes an override. | Extended |
 | 14 | `/pw difficulty` | `/atlas set <world> difficulty`, plus `default`. | Kept |
 | 15 | `/pw gamemode` (no bypass) | `/atlas set <world> gamemode`, plus `none`; `atlas.gamemode.bypass` (D5, D10). | Changed (D5) |
 | 16 | `/pw time … [lock]`, `lock`/`unlock` | `/atlas set <world> time` = fixed time; `time-cycle` flag for the clock. The broken `lock` argument is gone; the clock no longer jumps back when players enter. | Kept, fixed |
@@ -43,6 +43,10 @@ The 27 PixelWorlds nodes (`pixelworlds.*`, all `default: false`) are replaced by
 existed to import.
 
 ## Known limits
+
+The 2026-10-05 full source/configuration and content/asset presentation comparison found no
+legacy GUI to restore. The command-only interfaces and vanilla selection tool are accounted
+for in [the presentation audit](presentation-audit.md); approved text and behavior remain intact.
 
 - Every world lifecycle change needs a server restart, done by the owner.
 - A world can only be cloned once its folder exists, so after it has been loaded once.

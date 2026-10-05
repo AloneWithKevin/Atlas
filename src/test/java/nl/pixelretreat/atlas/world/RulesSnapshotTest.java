@@ -40,8 +40,44 @@ class RulesSnapshotTest {
     @Test void flagKeysAreStableAndAcceptUnderscores() {
         assertEquals(Optional.of(AtlasFlag.PLUGIN_HOSTILE_MOBS), AtlasFlag.fromKey("plugin_hostile_mobs"));
         assertEquals(Optional.of(AtlasFlag.TIME_SKIP), AtlasFlag.fromKey("Time-Skip"));
+        assertEquals(Optional.of(AtlasFlag.TRADING), AtlasFlag.fromKey("trading"));
+        assertEquals(Optional.of(AtlasFlag.TRADING), AtlasFlag.fromKey("TRADING"));
         assertTrue(AtlasFlag.fromKey("fly").isEmpty());
-        assertEquals(24, AtlasFlag.values().length);
+        assertEquals(25, AtlasFlag.values().length);
+    }
+
+    @Test void tradingIsOnByDefaultAndAFalseOverrideAppliesPerWorld() {
+        var arena = record("atlas:arena", Map.of(AtlasFlag.TRADING, false));
+        var spawn = record("atlas:spawn", Map.of());
+        var snapshot = new RulesSnapshot(Map.of(arena.key(), arena, spawn.key(), spawn), defaults());
+        assertTrue(snapshot.defaultFlag(AtlasFlag.TRADING));
+        assertFalse(snapshot.flag(arena.key(), AtlasFlag.TRADING));
+        assertTrue(snapshot.flag(spawn.key(), AtlasFlag.TRADING), "a world without an override uses the default");
+        assertTrue(snapshot.flag(WorldNames.OVERWORLD, AtlasFlag.TRADING));
+
+        var cleared = new RulesSnapshot(Map.of(arena.key(), record("atlas:arena", Map.of())), defaults());
+        assertTrue(cleared.flag(arena.key(), AtlasFlag.TRADING), "clearing the override returns to the default");
+    }
+
+    @Test void tradingTrueOverrideWinsOverAConfiguredFalseDefault() {
+        Map<AtlasFlag, Boolean> tradingOff = defaults();
+        tradingOff.put(AtlasFlag.TRADING, false);
+        var arena = record("atlas:arena", Map.of(AtlasFlag.TRADING, true));
+        var spawn = record("atlas:spawn", Map.of());
+        var snapshot = new RulesSnapshot(Map.of(arena.key(), arena, spawn.key(), spawn), tradingOff);
+        assertFalse(snapshot.defaultFlag(AtlasFlag.TRADING));
+        assertTrue(snapshot.flag(arena.key(), AtlasFlag.TRADING), "an explicit true override enables trading");
+        assertFalse(snapshot.flag(spawn.key(), AtlasFlag.TRADING),
+                "a world without an override stays at the configured default");
+
+        var cleared = new RulesSnapshot(Map.of(arena.key(), record("atlas:arena", Map.of())), tradingOff);
+        assertFalse(cleared.flag(arena.key(), AtlasFlag.TRADING),
+                "clearing the true override returns to the configured false default");
+    }
+
+    private static WorldRecord record(String key, Map<AtlasFlag, Boolean> flags) {
+        return new WorldRecord(key, Optional.of(WorldGenerator.VOID), true, Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), flags);
     }
 
     @Test void pluginSpawnsUseTheirOwnFlags() {
