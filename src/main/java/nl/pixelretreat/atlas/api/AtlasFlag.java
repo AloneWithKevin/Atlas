@@ -29,7 +29,9 @@ public enum AtlasFlag {
     TIME_SKIP("time-skip"),
     MOB_GRIEFING("mob-griefing"),
     KEEP_INVENTORY("keep-inventory"),
-    PORTALS("portals");
+    PORTALS("portals"),
+    /** Whether players may trade with each other through Handshake. */
+    TRADING("trading");
 
     private final String key;
 

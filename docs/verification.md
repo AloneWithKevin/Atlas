@@ -18,3 +18,30 @@
 
 Not yet verified: startup on a Veyra server, every command in game, cross-server portals
 (needs a Velocity pair). The in-game test is done by the owner.
+
+## 2026-10-05, Atlas 0.1.1
+
+New and changed behavior under verification: the `trading` flag (`AtlasFlag.TRADING`, shipped
+default on, per-world override and clearing through the generic flag path), the Handshake lookup
+through `AtlasFlag.fromKey("trading")` and config diagnostics redaction of `database.password`.
+New tests (`AtlasConfigTest`, `RulesServiceTest`, `AtlasCommandTest`, extended `RulesSnapshotTest`
+and `AtlasRepositoryMariaDbTest`) also cover the `/atlas reload` supplier path and its result
+messages.
+
+`Build-Plugin.ps1 -Project Atlas -GradleArgs clean,test,shadowJar,apiJar,--offline,--continue`
+on Java 25 completed successfully: **38 tests passed, 0 failures, 0 errors, 0 skipped**
+across 11 suites. The real MariaDB 12.2 repository test ran against an isolated loopback
+instance through `ATLAS_TEST_JDBC_URL`; the instance was shut down afterwards.
+
+Artifact inspection confirmed version 0.1.1, Folia support, unchanged dependencies and
+permissions, blank packaged database credentials and `default-flags.trading: true`.
+The runtime JAR contains no assets or dependency-provider/Bungee runtime classes.
+The API JAR contains only the public Atlas API and includes `AtlasFlag.TRADING`.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `Atlas-0.1.1.jar` | `21F0573579C17B314062EDB6E0E4EE33228F52629FD19DABC08295DE543F3DBB` |
+| `Atlas-0.1.1-api.jar` | `B4B923A1159786DF97631520385B71702F635BC021671B205AE8580AF05B0085` |
+
+Server startup, owner in-game acceptance and joint Handshake/spawn-consumer checks remain
+pending. Passing these tests does not establish cross-server portal or gameplay acceptance.

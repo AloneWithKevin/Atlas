@@ -49,6 +49,12 @@ final class AtlasRepositoryMariaDbTest {
             repository.setFlag("minecraft:overworld", AtlasFlag.PVP, false);
             repository.setFlag("atlas:arena", AtlasFlag.BLOCK_BREAK, true);
             repository.setFlag("atlas:arena", AtlasFlag.BLOCK_BREAK, null);
+            repository.setFlag("atlas:arena", AtlasFlag.TRADING, false);
+            assertFalse(repository.loadWorlds().get("atlas:arena").flags().get(AtlasFlag.TRADING),
+                    "a trading override persists");
+            repository.setFlag("atlas:arena", AtlasFlag.TRADING, null);
+            assertFalse(repository.loadWorlds().get("atlas:arena").flags().containsKey(AtlasFlag.TRADING),
+                    "default removes the trading override instead of storing the default");
             repository.setSetting("atlas:arena", AtlasRepository.Setting.FIXED_TIME, 6000L);
             repository.setSetting("atlas:arena", AtlasRepository.Setting.GAME_MODE, GameMode.ADVENTURE);
             repository.setSetting("atlas:arena", AtlasRepository.Setting.WEATHER, WeatherMode.CLEAR);

@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "nl.pixelretreat"
-version = "0.1.0"
+version = "0.1.1"
 
 repositories {
     mavenCentral()
@@ -33,6 +33,7 @@ dependencies {
     testImplementation(files("../Campfire/build/libs/Campfire-0.5.0.jar"))
     testImplementation(closet)
     testImplementation(files("../Closet/build/libs/Closet-0.1.2.jar"))
+    testImplementation(files("../.build-deps/bungeecord-chat.jar"))
     testImplementation("net.kyori:adventure-api:5.2.0")
     testImplementation("net.kyori:adventure-text-minimessage:5.2.0")
     testImplementation("net.kyori:adventure-text-serializer-plain:5.2.0")

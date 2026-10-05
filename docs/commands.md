@@ -43,8 +43,13 @@ dimensions at startup. A change therefore takes effect at the **next server star
 Flags: `hostile-mobs`, `friendly-mobs`, `plugin-hostile-mobs`, `plugin-friendly-mobs`, `tnt-damage`,
 `crystal-damage`, `fire-damage`, `explosion-damage`, `pvp`, `fall-damage`, `hunger`, `drowning`,
 `block-break`, `block-place`, `leaf-decay`, `crop-trampling`, `item-drop`, `item-pickup`, `weather`,
-`time-cycle`, `time-skip`, `mob-griefing`, `keep-inventory`, `portals`. See
+`time-cycle`, `time-skip`, `mob-griefing`, `keep-inventory`, `portals`, `trading`. See
 [configuration](configuration.md#flags) for what each one controls.
+
+Trading is controlled per world with the same command, for example `/atlas flag arena trading off`
+(refuses player trades in `arena`), `/atlas flag arena trading on` (allows them there even when
+`default-flags.trading` is off) and `/atlas flag arena trading default` (removes the override so
+`arena` follows the configured default).
 
 ## Selector, portals and keep-loaded regions
 

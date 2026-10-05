@@ -4,6 +4,9 @@
 stops Atlas. Keep it identical on EU and NA apart from `server.region` and the credentials. The
 distributed file has an empty username and password; fill them in on the server only.
 
+For an existing installation, add `default-flags.trading: true` before this version starts. A
+missing key stops Atlas; there is no migration, fallback or guessed default.
+
 | Key | Meaning |
 | --- | --- |
 | `server.region` | `EU` or `NA`. Must equal Postbox's region; all Atlas rows are stored under it. |
@@ -41,6 +44,7 @@ distributed file has an empty username and password; fill them in on the server 
 | `mob-griefing` | on | The `mobGriefing` game rule is off. |
 | `keep-inventory` | off | (When on) the `keepInventory` game rule is on. |
 | `portals` | on | Atlas portals in this world do nothing. |
+| `trading` | on | Player-to-player trades through Handshake are refused in this world. |
 
 ## Files Atlas writes
 
