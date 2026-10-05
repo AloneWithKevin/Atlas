@@ -29,6 +29,13 @@ name/values are white and click instructions use `#A8D5A2`. Atlas 0.1.2 changes 
 existing keys, English wording and line layout are preserved. Custom installed messages
 need review during an authorized release; a new JAR does not overwrite them automatically.
 
+Atlas 0.1.3 prefixes the existing selector action line with the registered
+`atlas:lore/action` mini-glyph. `closet.yml` sets `assets-root: content`; the external
+font/bitmap must be installed in the Atlas data folder independently of the JAR.
+Registration supplies them to Closet's required pack input. Keep the matching glyph
+prefix, manifest and external content together; a matching client pack release is
+required for rendering. See [external content](../content/README.md).
+
 ## Flags
 
 | Flag | Default | When off |

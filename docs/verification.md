@@ -1,5 +1,34 @@
 # Verification
 
+## 2026-10-05, Atlas 0.1.3 selector mini-glyph
+
+Full Java 25 `clean test shadowJar apiJar --offline --continue` build passed:
+**41 tests, 0 failures, 0 errors, 0 skipped**, including isolated MariaDB 12.2;
+the private instance was shut down afterwards.
+
+Real Campfire rendering confines `atlas:lore` to the single action character, keeps
+its authored color untinted, preserves white corner values and green click actions,
+and preserves literal placeholders across all 104 keys. Real Closet registration
+publishes the selector and `atlas:lore/action` to the catalog and both owner assets
+to required pack inputs. Bitmap dimensions/transparency, font reference, U+E000,
+display height 8 and ascent 7 are checked. The 16x16 bitmap matches the preserved
+generic action source byte-for-byte; no legacy art is modified. The only catalog
+change from 0.1.2 is the glyph and following space before the existing action line.
+
+Artifact checks confirm 0.1.3/Folia support, unchanged permissions/dependencies,
+blank database credentials, no assets/provider runtime in the JAR, API-only scope,
+and all 54 Atlas runtime classes byte-identical to verified 0.1.1. No PNG/font file
+is copied into code build output. The API JAR hash is unchanged.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `Atlas-0.1.3.jar` | `EC0D6AB2218B5C1E1D98C3B88A0479DE698F38E006351436200D3EBE4D63937F` |
+| `Atlas-0.1.3-api.jar` | `B4B923A1159786DF97631520385B71702F635BC021671B205AE8580AF05B0085` |
+
+No new deployment, live pack publication, server lifecycle action or game acceptance.
+Client tooltip appearance is still an owner check after a separately authorized
+matching content/pack release. See [the presentation audit](presentation-audit.md).
+
 ## 2026-10-01, Atlas 0.1.0
 
 `Build-Plugin.ps1 -Project Atlas -GradleArgs test,shadowJar,apiJar --offline` on Java 25:

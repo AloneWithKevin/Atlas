@@ -1,6 +1,7 @@
 # Atlas final report
 
-Atlas 0.1.2 (2026-10-05) adds message-palette corrections to the verified 0.1.1 trading patch
+Atlas 0.1.3 (2026-10-05) adds a registered selector mini-glyph to the 0.1.2 message-palette
+corrections and the verified 0.1.1 trading patch
 on Atlas 0.1.0 (2026-10-01). Atlas is the
 rewrite of PixelWorlds: it manages the extra worlds of one Veyra server, the rules inside every
 world, portals, safe teleports and keep-loaded chunk regions. `parity.md` holds the line-by-line
@@ -75,12 +76,19 @@ the reflective `worldService()` have no successor. The proposal's `[seed]` argum
   including real MariaDB and real Campfire/Closet validation. All 104 message keys checked;
   51 color-only changes preserve English text and layout. Gameplay/API bytecode and API-JAR
   hash remain identical to 0.1.1. No GUI/art assets were missing or added.
+- **Atlas 0.1.3** (2026-10-05): 41 tests passed, zero failures/errors/skips. The
+  existing action line starts with a reused transparent 16x16 glyph, registered through
+  Closet with an owner font and external content. Real registry/pack-input, font-scope,
+  bitmap and Campfire checks pass. No gameplay/API bytecode or permission changes.
 
 ## Open questions and known limits
 
 The 0.1.2 presentation patch checks every message path and the complete legacy interface/
 asset set; it changes colors only and preserves approved text, placeholders and layout.
-No legacy GUI or artwork is missing. See [the presentation audit](presentation-audit.md).
+No legacy GUI or artwork is missing. The later small-glyph instruction adds the
+selector action icon without changing existing words or adding lore lines. See
+[the presentation audit](presentation-audit.md). JAR, messages, manifest and external
+content/pack need a separately authorized release before client acceptance.
 
 - In-game testing on a Veyra server is done by the owner and has not happened yet.
 - Installed `config.yml` files need `default-flags.trading` before Atlas 0.1.1 starts; a missing key

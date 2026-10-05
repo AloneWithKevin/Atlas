@@ -19,3 +19,6 @@ Documentation: [commands](docs/commands.md), [permissions](docs/permissions.md),
 [API](docs/api.md), [comparison with PixelWorlds](docs/parity.md), [verification](docs/verification.md),
 [final report](docs/final-report.md), [player guide](docs/players.md),
 [build proposal](docs/build-proposal.md), [message and interface audit](docs/presentation-audit.md).
+
+Selector lore contributes an external mini-glyph through Closet. Its font/texture
+remain outside the JAR: [external content](content/README.md).

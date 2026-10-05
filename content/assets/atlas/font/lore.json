@@ -1,0 +1,11 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "pixelretreat:gui/atlas_lore/action.png",
+      "height": 8,
+      "ascent": 7,
+      "chars": ["\uE000"]
+    }
+  ]
+}

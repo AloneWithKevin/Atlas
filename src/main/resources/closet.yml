@@ -1,4 +1,5 @@
 schema: 1
+assets-root: content
 items:
   atlas:selector:
     category: atlas
@@ -8,3 +9,10 @@ items:
     name-key: items.selector.name
     lore:
       - items.selector.lore
+glyphs:
+  atlas:lore/action:
+    font: atlas:lore
+    codepoint: 57344
+    width: 8
+    height: 8
+    ascent: 7
