@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "nl.pixelretreat"
-version = "0.1.1"
+version = "0.1.2"
 
 repositories {
     mavenCentral()
@@ -14,7 +14,7 @@ repositories {
 val folia = files("../Veyra-release/folia-api/build/libs/folia-api-26.3.local-SNAPSHOT.jar")
 val veyra = files("../.build-deps/veyra-api-26.3.jar")
 val campfire = files("../Campfire/build/libs/Campfire-0.5.0-api.jar")
-val closet = files("../Closet/build/libs/Closet-0.1.2-api.jar")
+val closet = files("../Closet/build/libs/Closet-0.1.4-api.jar")
 
 dependencies {
     compileOnly(folia)
@@ -32,7 +32,7 @@ dependencies {
     testImplementation(campfire)
     testImplementation(files("../Campfire/build/libs/Campfire-0.5.0.jar"))
     testImplementation(closet)
-    testImplementation(files("../Closet/build/libs/Closet-0.1.2.jar"))
+    testImplementation(files("../Closet/build/libs/Closet-0.1.4.jar"))
     testImplementation(files("../.build-deps/bungeecord-chat.jar"))
     testImplementation("net.kyori:adventure-api:5.2.0")
     testImplementation("net.kyori:adventure-text-minimessage:5.2.0")

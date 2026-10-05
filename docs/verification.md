@@ -45,3 +45,33 @@ The API JAR contains only the public Atlas API and includes `AtlasFlag.TRADING`.
 
 Server startup, owner in-game acceptance and joint Handshake/spawn-consumer checks remain
 pending. Passing these tests does not establish cross-server portal or gameplay acceptance.
+
+## 2026-10-05, Atlas 0.1.2
+
+`Build-Plugin.ps1 -Project Atlas -GradleArgs clean,test,shadowJar,apiJar,--offline,--continue`
+on Java 25 completed successfully: **40 tests passed, 0 failures, 0 errors, 0 skipped**,
+including the real MariaDB 12.2 repository test in a private loopback instance, shut down
+afterwards. The existing test port was occupied, so a separate instance and data directory
+were used; the other process was not touched.
+
+The real Campfire catalog renders all 104 keys, accepts only the appropriate chat/item
+palette and keeps injected input tags literal without click/hover events. Explicit color
+checks cover usage labels/actions, world-info labels/default values and selector name/lore
+values/actions, including color bleeding. Real Closet 0.1.4 validates the selector manifest.
+Before/after comparison finds 51 color-only edits; all English text, keys, placeholders,
+line order, whitespace and empty lines remain identical.
+
+Artifact inspection confirms version/Folia support, unchanged permission/dependency
+declarations, blank credentials, no embedded assets/provider/Bungee runtime, and API-only
+scope. All 54 Atlas gameplay/API class entries are byte-identical to the verified 0.1.1
+runtime JAR. The API JAR's hash is unchanged.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `Atlas-0.1.2.jar` | `0D2C2F3E59DC3DA1D0E4CB9D49B0222CC4BB68A22B923C1EA70C700C98AD7FA2` |
+| `Atlas-0.1.2-api.jar` | `B4B923A1159786DF97631520385B71702F635BC021671B205AE8580AF05B0085` |
+
+The complete legacy presentation/asset comparison is in
+[the presentation audit](presentation-audit.md). No missing GUI, artwork or public contract
+blocks this patch. Release of the new JAR/messages and owner in-game checks are still pending;
+this task performed no deployment, pack publication or server lifecycle action.

@@ -6,6 +6,10 @@ depends on where you are.
 
 ## Getting around
 
+Atlas gives you travel and world-rule messages in your chosen language. Named destinations
+are highlighted so you can identify the world or server involved, and suggested actions
+use green text. You interact with portals directly; there is no Atlas menu to open.
+
 ### Portals
 
 Some places have portals that take you to another world, to a fixed spot, or even to the other

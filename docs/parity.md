@@ -44,6 +44,10 @@ existed to import.
 
 ## Known limits
 
+The 2026-10-05 full source/configuration and content/asset presentation comparison found no
+legacy GUI to restore. The command-only interfaces and vanilla selection tool are accounted
+for in [the presentation audit](presentation-audit.md); approved text and behavior remain intact.
+
 - Every world lifecycle change needs a server restart, done by the owner.
 - A world can only be cloned once its folder exists, so after it has been loaded once.
 - Cross-server portals need a Velocity route; VeyraTest01 currently has none.

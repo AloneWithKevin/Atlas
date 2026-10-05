@@ -21,6 +21,14 @@ missing key stops Atlas; there is no migration, fallback or guessed default.
 | `default-flags.<flag>` | Value of each flag in worlds that do not override it. |
 | `workers.threads`, `workers.queue-size` | Bounded database/file workers (1–16 threads, queue 1–4096). |
 
+## Messages and item text
+
+`messages.yml` contains every chat/console and selector name/lore key. Chat uses Campfire's
+ordinary-text default, `#F3E5AB` for subjects/labels and `#A8D5A2` for actions. Selector
+name/values are white and click instructions use `#A8D5A2`. Atlas 0.1.2 changes colors only;
+existing keys, English wording and line layout are preserved. Custom installed messages
+need review during an authorized release; a new JAR does not overwrite them automatically.
+
 ## Flags
 
 | Flag | Default | When off |

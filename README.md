@@ -18,4 +18,4 @@ Documentation: [commands](docs/commands.md), [permissions](docs/permissions.md),
 [configuration](docs/configuration.md), [architecture and threads](docs/architecture.md),
 [API](docs/api.md), [comparison with PixelWorlds](docs/parity.md), [verification](docs/verification.md),
 [final report](docs/final-report.md), [player guide](docs/players.md),
-[build proposal](docs/build-proposal.md).
+[build proposal](docs/build-proposal.md), [message and interface audit](docs/presentation-audit.md).
