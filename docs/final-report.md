@@ -1,5 +1,11 @@
 # Atlas final report
 
+Atlas 0.1.8 (2026-10-06) settles queued worker results on shutdown, waits for
+region ticket reconciliation before reporting reload completion, discards older
+reads and prevents delayed callbacks from restoring released tickets. Six targeted
+lifecycle regressions pass. API, catalog, permissions, content and database contracts
+remain unchanged; see [verification](verification.md).
+
 Atlas 0.1.7 (2026-10-06) binds the remaining eight fixed console/target templates
 to messages.yml. The catalog now contains 112 required keys. Configured overrides
 drive all four destination formats, bounds and warnings; exceptions and credentials
@@ -125,7 +131,7 @@ content/pack need a separately authorized release before client acceptance.
 - Installed `config.yml` files need `default-flags.trading` before Atlas 0.1.1 starts; a missing key
   stops startup by design (no fallback), and the distributed default is `true`.
 - Cross-server portals still need a Velocity route and an in-game test.
-- Colosseum's arena model (owner discussion), Velocity routing and game acceptance remain external
-  gates.
+- The owner removed Colosseum's arena-model discussion from Atlas's completion gates
+  and deferred test-server Velocity routing. Game acceptance remains open.
 - Handshake's remaining preconditions (Campfire ignore API, installed dependencies) are listed in
   its own handoff, not in this plugin.
