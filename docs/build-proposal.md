@@ -44,11 +44,14 @@ asks `Server#getGenerator(bukkitName)` for a plugin chunk generator.
 | load / auto-load | `world enable <name>` | Loaded from the next restart on |
 | unload | `world disable <name>` | Not loaded from the next restart on; players inside are moved to the overworld spawn by vanilla |
 | delete | `world delete <name> confirm` | Disabled and folder deleted at the next startup |
-| clone | `world clone <source> <target>` | Copied at the next startup |
-| reset | `world reset <name> [source] confirm` | Replaced at the next startup |
+| clone | `world clone <source> <target>` | Verified preparation at the next start, activation at the following start |
+| reset | `world reset <name> [source] confirm` | Target undeclared before preparation; original retained, verified copy loads at the following start |
 | — | `world pending`, `world cancel <id>` | Show or cancel queued operations |
 
 - Overworld, nether and end can never be deleted, disabled, cloned into or reset.
+- Owner decision 2026-10-06: proven prepared copies may finish automatically after
+  interruption. Clone/reset preparation and activation may use two starts. See
+  [world recovery](world-recovery.md) for durable phases, failure handling and limits.
 - Keep-loaded regions still block disable, delete and reset of their world.
 
 ## 3. World rules

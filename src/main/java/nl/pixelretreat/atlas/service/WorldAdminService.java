@@ -73,8 +73,7 @@ public final class WorldAdminService {
                 if (portals.index().anyIn(key)) return Result.HAS_PORTALS;
                 if (keepLoaded.anyIn(key)) return Result.HAS_REGIONS;
             }
-            repository.setEnabled(key, enabled);
-            return Result.DONE;
+            return repository.setEnabled(key, enabled) ? Result.DONE : Result.UNKNOWN_WORLD;
         });
     }
 
@@ -86,9 +85,7 @@ public final class WorldAdminService {
             if (world.isEmpty() || world.get().generator().isEmpty()) return Result.UNKNOWN_WORLD;
             if (portals.index().anyIn(key)) return Result.HAS_PORTALS;
             if (keepLoaded.anyIn(key)) return Result.HAS_REGIONS;
-            repository.setEnabled(key, false);
-            repository.queue(PendingOperation.Kind.DELETE, key, Optional.empty(), actor);
-            return Result.DONE;
+            return repository.disableAndQueueDelete(key, actor) ? Result.DONE : Result.UNKNOWN_WORLD;
         });
     }
 
@@ -102,9 +99,8 @@ public final class WorldAdminService {
             if (folders.exists(targetKey)) return Result.FOLDER_EXISTS;
             WorldGenerator generator = current().world(sourceKey).flatMap(WorldRecord::generator)
                     .orElse(WorldGenerator.forBuiltIn(sourceKey));
-            if (!repository.insertWorld(targetKey, generator, Optional.of(sourceKey))) return Result.ALREADY_EXISTS;
-            repository.queue(PendingOperation.Kind.CLONE, targetKey, Optional.of(sourceKey), actor);
-            return Result.DONE;
+            return repository.insertAndQueueClone(targetKey, generator, sourceKey, actor)
+                    ? Result.DONE : Result.ALREADY_EXISTS;
         });
     }
 
@@ -119,7 +115,7 @@ public final class WorldAdminService {
             if (from.get().equals(key)) return Result.SAME_WORLD;
             if (!knownSource(from.get())) return Result.UNKNOWN_WORLD;
             if (keepLoaded.anyIn(key)) return Result.HAS_REGIONS;
-            repository.queue(PendingOperation.Kind.RESET, key, from, actor);
+            repository.queueReset(key, from.get(), actor);
             return Result.DONE;
         });
     }
@@ -134,11 +130,6 @@ public final class WorldAdminService {
         return change(() -> {
             Optional<PendingOperation> cancelled = repository.cancel(id);
             if (cancelled.isEmpty()) return Result.NOT_FOUND;
-            switch (cancelled.get().kind()) {
-                case CLONE -> repository.deleteWorld(cancelled.get().world());
-                case DELETE -> repository.setEnabled(cancelled.get().world(), true);
-                case RESET -> { }
-            }
             return Result.DONE;
         });
     }

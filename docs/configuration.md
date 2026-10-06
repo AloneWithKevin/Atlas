@@ -67,3 +67,6 @@ required for rendering. See [external content](content.md).
   Atlas world. Generated from MariaDB; do not edit by hand.
 - `<level>/dimensions/atlas/<name>/`: Atlas world folders, written by Minecraft. Atlas copies or
   deletes them only during startup, for queued operations.
+- Same-parent .NAME.atlas-ID-staging and .NAME.atlas-ID-original directories retain
+  prepared and original trees. No automatic cleanup period is configured.
+  See [world recovery](world-recovery.md). No new configuration keys are required.

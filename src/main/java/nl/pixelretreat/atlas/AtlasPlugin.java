@@ -27,6 +27,7 @@ import nl.pixelretreat.atlas.listener.PortalListener;
 import nl.pixelretreat.atlas.listener.SelectorListener;
 import nl.pixelretreat.atlas.listener.WorldRulesListener;
 import nl.pixelretreat.atlas.message.AtlasMessages;
+import nl.pixelretreat.atlas.message.BootstrapMessages;
 import nl.pixelretreat.atlas.service.AtlasWorkers;
 import nl.pixelretreat.atlas.service.KeepLoadedService;
 import nl.pixelretreat.atlas.service.PortalService;
@@ -41,7 +42,6 @@ import nl.pixelretreat.atlas.world.WorldFolders;
 import nl.pixelretreat.campfire.api.CampfireDelivery;
 import nl.pixelretreat.campfire.api.CampfireMessages;
 import nl.pixelretreat.campfire.api.MessageCatalog;
-import nl.pixelretreat.campfire.api.MessageCatalogException;
 import nl.pixelretreat.closet.api.ClosetGrants;
 import nl.pixelretreat.closet.api.ClosetService;
 import nl.pixelretreat.closet.api.ContentRegistration;
@@ -66,6 +66,7 @@ public final class AtlasPlugin extends JavaPlugin {
     private volatile AtlasRepository repository;
     private volatile Path levelFolder;
     private volatile Throwable loadFailure;
+    private volatile String bootstrapFailure;
     private volatile List<StartupOperations.Outcome> startupOutcomes = List.of();
     private volatile boolean datapackChangedAtStartup;
     private volatile AtlasWorkers workers;
@@ -78,6 +79,7 @@ public final class AtlasPlugin extends JavaPlugin {
     /** Opens the database and runs queued folder work while no world is loaded yet. */
     @Override public void onLoad() {
         try {
+            bootstrapFailure = BootstrapMessages.startupFailure(getResource("messages.yml"));
             ensureResource("config.yml");
             AtlasConfig settings = AtlasConfig.read(YamlConfiguration.loadConfiguration(
                     getDataFolder().toPath().resolve("config.yml").toFile()));
@@ -86,8 +88,9 @@ public final class AtlasPlugin extends JavaPlugin {
             database = openDatabase(settings);
             repository = new AtlasRepository(database, settings.region());
             repository.initialize();
-            startupOutcomes = new StartupOperations(repository, folders(settings)).run();
-            datapackChangedAtStartup = datapack(settings).synchronize(repository.loadWorlds().values());
+            DatapackWriter writer = datapack(settings);
+            startupOutcomes = new StartupOperations(repository, folders(settings), writer.declaredWorlds()).run();
+            datapackChangedAtStartup = writer.synchronize(repository.loadWorlds().values());
         } catch (Exception failure) {
             loadFailure = failure;
         }
@@ -304,15 +307,13 @@ public final class AtlasPlugin extends JavaPlugin {
     private void fail(Throwable failure) {
         if (stopped.get() || !failed.compareAndSet(false, true)) return;
         Throwable cause = failure instanceof CompletionException && failure.getCause() != null ? failure.getCause() : failure;
-        String text = "startup.failed";
+        loadFailure = cause; // Diagnostic stays internal; neither cause text nor credentials reach the console.
+        String text = bootstrapFailure;
         try {
             if (catalog != null) text = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
                     .plainText().serialize(catalog.get("startup.failed"));
         } catch (RuntimeException ignored) { /* A broken catalog cannot render itself. */ }
-        String diagnostic = cause instanceof MessageCatalogException catalogFailure
-                ? catalogFailure.getMessage() : cause.getClass().getSimpleName()
-                + (cause.getMessage() == null ? "" : ": " + cause.getMessage());
-        getLogger().severe(text + " (" + diagnostic + ")");
+        if (text != null) getLogger().severe(text);
         getServer().getGlobalRegionScheduler().run(this, ignored -> {
             if (isEnabled()) getServer().getPluginManager().disablePlugin(this);
         });

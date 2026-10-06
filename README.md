@@ -3,7 +3,8 @@
 Atlas manages the worlds of one Veyra server: extra worlds, the rules inside every world, portals,
 safe world teleports and keep-loaded chunk regions. It replaces PixelWorlds.
 
-- Worlds are declared as dimensions in an Atlas-owned data pack and load at the next server start.
+- Worlds are data pack dimensions. New/imported worlds load at the next start;
+  clones and resets use a preparation start followed by an activation start.
 - Rules (25 flags and per-world settings), portals and keep-loaded regions are stored per server
   region (EU or NA) in the shared MariaDB database `pixelretreat_veyra`.
 - Requires Postbox, Campfire and Closet. Built for Veyra 26.3 (Folia).

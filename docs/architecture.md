@@ -11,8 +11,9 @@ data packs in `Main` before plugins load. Atlas therefore:
 1. writes `<level>/datapacks/atlas` from MariaDB immediately when staff change the world set; the
    pack is picked up automatically at the next start;
 2. queues folder work (delete, clone, reset) in `atlas_pending_operation`;
-3. runs that work in `onLoad`, after the registries are read but before any world is loaded, and
-   records each result (`DONE`/`FAILED`, reported once in the console);
+3. runs folder work only when the target is absent from startup declarations.
+   Clones/resets prepare verified copies during one start and declare the completed
+   world for the following start; uncertain content stays disabled;
 4. re-synchronises the data pack in `onLoad` and warns once if it was out of date.
 
 Void worlds are a flat generator without layers in `minecraft:the_void`; no plugin chunk generator
@@ -31,12 +32,17 @@ except travel tickets, which the origin writes for the destination.
 | `atlas_portal` | Bounds, destination (spawn, location or other region), cooldown, sound, particle, restriction, fill block. |
 | `atlas_keep_loaded_region` | Chunk rectangles. |
 | `atlas_pending_operation` | Queued folder work and its outcome. |
+| `atlas_world_copy` | Durable phase, activation state and sealed counts. |
+| `atlas_world_copy_entry` | Prepared/original paths, sizes and checksum evidence. |
 | `atlas_travel_ticket` | Cross-server trips; consumed once with a conditional update, expire after `portals.travel-ticket-minutes`, purged a day after expiry. |
 
 No old data existed (no PixelWorlds installation or extra dimension on any instance), so nothing
 is imported.
 
 ## Threads
+
+See [world recovery](world-recovery.md) for atomic queue/cancellation, two starts,
+bounded copy workers and retained original trees.
 
 | Work | Where |
 | --- | --- |

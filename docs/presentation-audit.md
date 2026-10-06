@@ -1,5 +1,11 @@
 # Message and interface audit
 
+2026-10-06, 0.1.5: owner approved exactly world.clone-queued, world.reset-queued
+and world.confirm-reset to explain separate preparation/activation starts.
+The 104-key catalog and placeholder/color contracts are unchanged. Bootstrap
+console errors now use the existing bundled startup.failed template; technical
+exception details are not appended. Other outstanding wording remains under review.
+
 Reviewed on 2026-10-05 for Atlas 0.1.2/0.1.3 against the message and item palettes in the
 current Veyra plugin standards, sections 11 and 12.
 
