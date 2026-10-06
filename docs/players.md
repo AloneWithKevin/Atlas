@@ -32,6 +32,9 @@ Portal messages tell you what happened:
 - **"Your portal trip hit a bump! You're staying right where you joined."** means the
   trip could not be completed on arrival. You remain at your joining position.
 
+When Atlas teleports you to a world, **"Whoosh! You've arrived in ..."** confirms
+your destination. World names in messages identify where you have arrived.
+
 ## World rules
 
 Each world decides things such as:
