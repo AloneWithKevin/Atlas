@@ -50,6 +50,11 @@ another world.
 
 ## FAQ
 
+**Why is a destination world temporarily unavailable?**
+Some world changes need a preparation start followed by an activation start.
+During that period a portal destination can be unavailable. Ask staff when it
+will reopen; you do not need to change your settings or run a command.
+
 **I can't break or place blocks here.**
 Building is turned off in this world. Go to a world where building is allowed, such as the
 survival world.

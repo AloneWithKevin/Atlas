@@ -1,5 +1,28 @@
 # Verification
 
+## 2026-10-06, Atlas 0.1.5 world preparation/recovery
+
+Java 25 clean test shadowJar apiJar offline build passes **64 tests, 0 failures,
+0 errors, 0 skipped**, using a private MariaDB 12.2 fixture, real Campfire and Closet.
+No installed database was written or server restarted for verification.
+
+Seven interruption boundaries cover clone/reset after sealing, moving the old
+tree, publishing the new tree and persisting publication. Resumption uses the
+prepared bytes even when source bytes have changed; applied worlds are never
+replayed. Missing/changed/extra evidence, unsealed copies, contradictory paths and
+legacy operations preserve content and disable the target. Tests also cover stale
+startup declarations, two-start activation, SQL rollback of queue/cancel/final
+activation, prior disabled reset state, and conflicting pending deletions.
+Copy tests verify bounded traversal, all interrupted writers retired before return,
+identity omission and failed reset preparation retaining the original world.
+
+The public API JAR remains byte-identical to 0.1.4 (SHA-256
+B4B923A1159786DF97631520385B71702F635BC021671B205AE8580AF05B0085).
+All 104 message keys and placeholder contracts remain unchanged; only the three
+approved lifecycle values changed. Descriptor permissions, config defaults and
+the two external assets remain unchanged except the plugin version.
+These tests do not establish hardware power-loss durability or in-game acceptance.
+
 ## 2026-10-06, Atlas 0.1.4 portal wording
 
 The four ordinary player portal messages now use friendlier English. No keys,

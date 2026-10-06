@@ -27,6 +27,7 @@ import nl.pixelretreat.atlas.world.SpawnPoint;
 import nl.pixelretreat.atlas.world.WeatherMode;
 import nl.pixelretreat.atlas.world.WorldGenerator;
 import nl.pixelretreat.atlas.world.WorldRecord;
+import nl.pixelretreat.atlas.world.WorldCopyState;
 import org.bukkit.Difficulty;
 import org.bukkit.GameMode;
 
@@ -92,6 +93,20 @@ public final class AtlasRepository {
                       created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), expires_at TIMESTAMP(3) NOT NULL,
                       consumed_at TIMESTAMP(3) NULL,
                       KEY atlas_ticket_arrival (player, target_region, consumed_at))""");
+            statement.execute("""
+                    CREATE TABLE IF NOT EXISTS atlas_world_copy (
+                      server VARCHAR(8) NOT NULL, operation_id BIGINT NOT NULL,
+                      world VARCHAR(100) NOT NULL, source VARCHAR(100) NOT NULL,
+                      phase VARCHAR(16) NOT NULL, activate_after_copy BOOLEAN NOT NULL,
+                      prepared_entries BIGINT NOT NULL DEFAULT 0, original_entries BIGINT NOT NULL DEFAULT 0,
+                      PRIMARY KEY (server, operation_id), KEY atlas_copy_world (server, world, phase))""");
+            statement.execute("""
+                    CREATE TABLE IF NOT EXISTS atlas_world_copy_entry (
+                      server VARCHAR(8) NOT NULL, operation_id BIGINT NOT NULL, tree_kind VARCHAR(8) NOT NULL,
+                      path_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                      entry_path TEXT NOT NULL, directory BOOLEAN NOT NULL, bytes BIGINT NOT NULL,
+                      sha256 CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                      PRIMARY KEY (server, operation_id, tree_kind, path_hash))""");
         }
     }
 
@@ -151,19 +166,43 @@ public final class AtlasRepository {
 
     /** Inserts a new Atlas world; returns false if the key is already used on this server. */
     public boolean insertWorld(String key, WorldGenerator generator, Optional<String> resetSource) throws SQLException {
-        try (Connection connection = database.getConnection(); PreparedStatement insert = connection.prepareStatement(
-                "INSERT IGNORE INTO atlas_world (server, world, generator, enabled, reset_source) VALUES (?, ?, ?, TRUE, ?)")) {
+        try (Connection connection = database.getConnection()) {
+            return insertWorld(connection, key, generator, resetSource, true);
+        }
+    }
+
+    private boolean insertWorld(Connection connection, String key, WorldGenerator generator,
+                                Optional<String> resetSource, boolean enabled) throws SQLException {
+        try (PreparedStatement insert = connection.prepareStatement(
+                "INSERT IGNORE INTO atlas_world (server, world, generator, enabled, reset_source) VALUES (?, ?, ?, ?, ?)")) {
             insert.setString(1, server);
             insert.setString(2, key);
             insert.setString(3, generator.name());
-            insert.setString(4, resetSource.orElse(null));
+            insert.setBoolean(4, enabled);
+            insert.setString(5, resetSource.orElse(null));
             return insert.executeUpdate() == 1;
         }
     }
 
     /** Switches whether an Atlas world is declared in the data pack. */
     public boolean setEnabled(String key, boolean enabled) throws SQLException {
-        try (Connection connection = database.getConnection(); PreparedStatement update = connection.prepareStatement(
+        try (Connection connection = database.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                lockWorld(connection, key);
+                requireCopyUnlocked(connection, key);
+                boolean changed = setEnabled(connection, key, enabled);
+                connection.commit();
+                return changed;
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
+            }
+        }
+    }
+
+    private boolean setEnabled(Connection connection, String key, boolean enabled) throws SQLException {
+        try (PreparedStatement update = connection.prepareStatement(
                 "UPDATE atlas_world SET enabled = ? WHERE server = ? AND world = ? AND generator IS NOT NULL")) {
             update.setBoolean(1, enabled);
             update.setString(2, server);
@@ -244,18 +283,22 @@ public final class AtlasRepository {
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
-                for (String table : List.of("atlas_world_flag", "atlas_world")) {
-                    try (PreparedStatement delete = connection.prepareStatement(
-                            "DELETE FROM " + table + " WHERE server = ? AND world = ?")) {
-                        delete.setString(1, server);
-                        delete.setString(2, key);
-                        delete.executeUpdate();
-                    }
-                }
+                deleteWorld(connection, key);
                 connection.commit();
             } catch (SQLException failure) {
                 connection.rollback();
                 throw failure;
+            }
+        }
+    }
+
+    private void deleteWorld(Connection connection, String key) throws SQLException {
+        for (String table : List.of("atlas_world_flag", "atlas_world")) {
+            try (PreparedStatement delete = connection.prepareStatement(
+                    "DELETE FROM " + table + " WHERE server = ? AND world = ?")) {
+                delete.setString(1, server);
+                delete.setString(2, key);
+                delete.executeUpdate();
             }
         }
     }
@@ -273,7 +316,14 @@ public final class AtlasRepository {
 
     /** Queues folder work for the next start and returns its id. */
     public long queue(PendingOperation.Kind kind, String world, Optional<String> source, UUID requestedBy) throws SQLException {
-        try (Connection connection = database.getConnection(); PreparedStatement insert = connection.prepareStatement(
+        try (Connection connection = database.getConnection()) {
+            return queue(connection, kind, world, source, requestedBy);
+        }
+    }
+
+    private long queue(Connection connection, PendingOperation.Kind kind, String world,
+                       Optional<String> source, UUID requestedBy) throws SQLException {
+        try (PreparedStatement insert = connection.prepareStatement(
                 "INSERT INTO atlas_pending_operation (server, kind, world, source, requested_by, state) "
                         + "VALUES (?, ?, ?, ?, ?, 'PENDING')", Statement.RETURN_GENERATED_KEYS)) {
             insert.setString(1, server);
@@ -286,6 +336,126 @@ public final class AtlasRepository {
                 if (!keys.next()) throw new SQLException("No id for queued Atlas operation");
                 return keys.getLong(1);
             }
+        }
+    }
+
+    /** Declares the clone and records its required copy in one transaction. */
+    public boolean insertAndQueueClone(String world, WorldGenerator generator, String source, UUID actor)
+            throws SQLException {
+        try (Connection connection = database.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                requireCopyUnlocked(connection, world);
+                if (!insertWorld(connection, world, generator, Optional.of(source), false)) {
+                    connection.rollback();
+                    return false;
+                }
+                long id = queue(connection, PendingOperation.Kind.CLONE, world, Optional.of(source), actor);
+                insertCopy(connection, id, world, source, true);
+                connection.commit();
+                return true;
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
+            }
+        }
+    }
+
+    /** Undeclares the world and queues deletion atomically. */
+    public boolean disableAndQueueDelete(String world, UUID actor) throws SQLException {
+        try (Connection connection = database.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                lockWorld(connection, world);
+                requireCopyUnlocked(connection, world);
+                requireNoPendingDelete(connection, world);
+                if (!setEnabled(connection, world, false)) {
+                    connection.rollback();
+                    return false;
+                }
+                queue(connection, PendingOperation.Kind.DELETE, world, Optional.empty(), actor);
+                connection.commit();
+                return true;
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
+            }
+        }
+    }
+
+    private void lockWorld(Connection connection, String world) throws SQLException {
+        try (PreparedStatement query = connection.prepareStatement(
+                "SELECT world FROM atlas_world WHERE server = ? AND world = ? FOR UPDATE")) {
+            query.setString(1, server);
+            query.setString(2, world);
+            try (ResultSet ignored = query.executeQuery()) { while (ignored.next()) { } }
+        }
+    }
+
+    /** Undeclares a reset target and records preparation in the same transaction. */
+    public long queueReset(String world, String source, UUID actor) throws SQLException {
+        try (Connection connection = database.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                boolean wasEnabled;
+                try (PreparedStatement query = connection.prepareStatement(
+                        "SELECT enabled, generator FROM atlas_world WHERE server = ? AND world = ? FOR UPDATE")) {
+                    query.setString(1, server);
+                    query.setString(2, world);
+                    try (ResultSet rows = query.executeQuery()) {
+                        if (!rows.next() || rows.getString("generator") == null) throw new SQLException("Reset target unavailable");
+                        wasEnabled = rows.getBoolean("enabled");
+                    }
+                }
+                requireCopyUnlocked(connection, world);
+                setEnabled(connection, world, false);
+                requireNoPendingDelete(connection, world);
+                long id = queue(connection, PendingOperation.Kind.RESET, world, Optional.of(source), actor);
+                insertCopy(connection, id, world, source, wasEnabled);
+                connection.commit();
+                return id;
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
+            }
+        }
+    }
+
+    private void requireCopyUnlocked(Connection connection, String world) throws SQLException {
+        try (PreparedStatement query = connection.prepareStatement(
+                "SELECT operation_id FROM atlas_world_copy WHERE server = ? AND world = ? "
+                        + "AND phase NOT IN ('APPLIED', 'CANCELLED') LIMIT 1")) {
+            query.setString(1, server);
+            query.setString(2, world);
+            try (ResultSet rows = query.executeQuery()) {
+                if (rows.next()) throw new SQLException("World has an unresolved copy operation");
+            }
+        }
+    }
+
+    private void requireNoPendingDelete(Connection connection, String world) throws SQLException {
+        try (PreparedStatement query = connection.prepareStatement(
+                "SELECT id FROM atlas_pending_operation WHERE server = ? AND world = ? "
+                        + "AND kind = 'DELETE' AND state = 'PENDING' LIMIT 1 FOR UPDATE")) {
+            query.setString(1, server);
+            query.setString(2, world);
+            try (ResultSet rows = query.executeQuery()) {
+                if (rows.next()) throw new SQLException("World already has a pending deletion");
+            }
+        }
+    }
+
+    private void insertCopy(Connection connection, long id, String world, String source, boolean activate)
+            throws SQLException {
+        try (PreparedStatement insert = connection.prepareStatement(
+                "INSERT INTO atlas_world_copy (server, operation_id, world, source, phase, activate_after_copy) "
+                        + "VALUES (?, ?, ?, ?, 'QUEUED', ?)")) {
+            insert.setString(1, server);
+            insert.setLong(2, id);
+            insert.setString(3, world);
+            insert.setString(4, source);
+            insert.setBoolean(5, activate);
+            insert.executeUpdate();
         }
     }
 
@@ -310,7 +480,13 @@ public final class AtlasRepository {
 
     /** Records the outcome of a pending operation. Only a pending row can change. */
     public boolean finish(long id, boolean success, String result) throws SQLException {
-        try (Connection connection = database.getConnection(); PreparedStatement update = connection.prepareStatement(
+        try (Connection connection = database.getConnection()) {
+            return finish(connection, id, success, result);
+        }
+    }
+
+    private boolean finish(Connection connection, long id, boolean success, String result) throws SQLException {
+        try (PreparedStatement update = connection.prepareStatement(
                 "UPDATE atlas_pending_operation SET state = ?, result = ?, finished_at = CURRENT_TIMESTAMP(3) "
                         + "WHERE id = ? AND server = ? AND state = 'PENDING'")) {
             update.setString(1, success ? "DONE" : "FAILED");
@@ -323,15 +499,240 @@ public final class AtlasRepository {
 
     /** Cancels a pending operation; returns it when this call cancelled it. */
     public Optional<PendingOperation> cancel(long id) throws SQLException {
-        Optional<PendingOperation> operation = pending().stream().filter(op -> op.id() == id).findFirst();
-        if (operation.isEmpty()) return Optional.empty();
-        try (Connection connection = database.getConnection(); PreparedStatement update = connection.prepareStatement(
-                "UPDATE atlas_pending_operation SET state = 'CANCELLED', finished_at = CURRENT_TIMESTAMP(3) "
-                        + "WHERE id = ? AND server = ? AND state = 'PENDING'")) {
-            update.setLong(1, id);
-            update.setString(2, server);
-            return update.executeUpdate() == 1 ? operation : Optional.empty();
+        try (Connection connection = database.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                PendingOperation operation;
+                try (PreparedStatement query = connection.prepareStatement(
+                        "SELECT * FROM atlas_pending_operation WHERE id = ? AND server = ? AND state = 'PENDING' FOR UPDATE")) {
+                    query.setLong(1, id);
+                    query.setString(2, server);
+                    try (ResultSet rows = query.executeQuery()) {
+                        if (!rows.next()) {
+                            connection.rollback();
+                            return Optional.empty();
+                        }
+                        operation = new PendingOperation(rows.getLong("id"),
+                                PendingOperation.Kind.valueOf(rows.getString("kind")), rows.getString("world"),
+                                Optional.ofNullable(rows.getString("source")), UUID.fromString(rows.getString("requested_by")),
+                                rows.getTimestamp("requested_at").toInstant());
+                    }
+                }
+                Optional<WorldCopyState> copy = copyState(connection, id, true);
+                if (copy.isPresent() && copy.get().phase() != WorldCopyState.Phase.QUEUED)
+                    throw new SQLException("Copy preparation has already started");
+                if (copy.isEmpty() && operation.kind() != PendingOperation.Kind.DELETE)
+                    throw new SQLException("Legacy copy has no preparation evidence");
+                switch (operation.kind()) {
+                    case CLONE -> deleteWorld(connection, operation.world());
+                    case DELETE -> setEnabled(connection, operation.world(), true);
+                    case RESET -> setEnabled(connection, operation.world(), copy.orElseThrow().activateAfterCopy());
+                }
+                if (copy.isPresent()) {
+                    try (PreparedStatement update = connection.prepareStatement(
+                            "UPDATE atlas_world_copy SET phase = 'CANCELLED' WHERE server = ? AND operation_id = ? AND phase = 'QUEUED'")) {
+                        update.setString(1, server);
+                        update.setLong(2, id);
+                        if (update.executeUpdate() != 1) throw new SQLException("Copy changed while cancelling");
+                    }
+                }
+                try (PreparedStatement update = connection.prepareStatement(
+                        "UPDATE atlas_pending_operation SET state = 'CANCELLED', finished_at = CURRENT_TIMESTAMP(3) "
+                                + "WHERE id = ? AND server = ? AND state = 'PENDING'")) {
+                    update.setLong(1, id);
+                    update.setString(2, server);
+                    if (update.executeUpdate() != 1) throw new SQLException("Operation changed while cancelling");
+                }
+                connection.commit();
+                return Optional.of(operation);
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
+            }
         }
+    }
+
+    /** Reads durable evidence; absent means a legacy operation, never a guessed queued phase. */
+    public Optional<WorldCopyState> copyState(long id) throws SQLException {
+        try (Connection connection = database.getConnection()) { return copyState(connection, id, false); }
+    }
+
+    private Optional<WorldCopyState> copyState(Connection connection, long id, boolean lock) throws SQLException {
+        try (PreparedStatement query = connection.prepareStatement(
+                "SELECT * FROM atlas_world_copy WHERE server = ? AND operation_id = ?" + (lock ? " FOR UPDATE" : ""))) {
+            query.setString(1, server);
+            query.setLong(2, id);
+            try (ResultSet row = query.executeQuery()) {
+                if (!row.next()) return Optional.empty();
+                return Optional.of(new WorldCopyState(WorldCopyState.Phase.valueOf(row.getString("phase")),
+                        row.getBoolean("activate_after_copy"), row.getLong("prepared_entries"), row.getLong("original_entries")));
+            }
+        }
+    }
+
+    /** Commits an intent before any filesystem action; cancellation cannot race the first claim. */
+    public void advanceCopy(long id, WorldCopyState.Phase before, WorldCopyState.Phase after) throws SQLException {
+        try (Connection connection = database.getConnection(); PreparedStatement update = connection.prepareStatement(
+                "UPDATE atlas_world_copy c JOIN atlas_pending_operation p ON p.id = c.operation_id AND p.server = c.server "
+                        + "SET c.phase = ? WHERE c.server = ? AND c.operation_id = ? AND c.phase = ? AND p.state = 'PENDING'")) {
+            update.setString(1, after.name());
+            update.setString(2, server);
+            update.setLong(3, id);
+            update.setString(4, before.name());
+            if (update.executeUpdate() != 1) throw new SQLException("Copy phase changed");
+        }
+    }
+
+    /** Stores exact file/directory evidence while the preparation is incomplete. */
+    public void recordCopyEntry(long id, String tree, WorldCopyState.Entry entry) throws SQLException {
+        checkTree(tree);
+        try (Connection connection = database.getConnection(); PreparedStatement insert = connection.prepareStatement(
+                "INSERT INTO atlas_world_copy_entry (server, operation_id, tree_kind, path_hash, entry_path, directory, bytes, sha256) "
+                        + "SELECT ?, ?, ?, ?, ?, ?, ?, ? FROM atlas_world_copy "
+                        + "WHERE server = ? AND operation_id = ? AND phase = 'COPYING'")) {
+            insert.setString(1, server);
+            insert.setLong(2, id);
+            insert.setString(3, tree);
+            insert.setString(4, pathHash(entry.path()));
+            insert.setString(5, entry.path());
+            insert.setBoolean(6, entry.directory());
+            insert.setLong(7, entry.bytes());
+            insert.setString(8, entry.sha256());
+            insert.setString(9, server);
+            insert.setLong(10, id);
+            if (insert.executeUpdate() != 1) throw new SQLException("Copy no longer accepts evidence");
+        }
+    }
+
+    /** Looks up one entry without materializing a world's manifest in memory. */
+    public Optional<WorldCopyState.Entry> copyEntry(long id, String tree, String path) throws SQLException {
+        checkTree(tree);
+        try (Connection connection = database.getConnection(); PreparedStatement query = connection.prepareStatement(
+                "SELECT entry_path, directory, bytes, sha256 FROM atlas_world_copy_entry "
+                        + "WHERE server = ? AND operation_id = ? AND tree_kind = ? AND path_hash = ?")) {
+            query.setString(1, server);
+            query.setLong(2, id);
+            query.setString(3, tree);
+            query.setString(4, pathHash(path));
+            try (ResultSet row = query.executeQuery()) {
+                if (!row.next()) return Optional.empty();
+                if (!path.equals(row.getString("entry_path"))) throw new SQLException("Evidence path hash conflicts");
+                return Optional.of(new WorldCopyState.Entry(path, row.getBoolean("directory"),
+                        row.getLong("bytes"), row.getString("sha256")));
+            }
+        }
+    }
+
+    /** Publishes the manifest counts only after every copy writer and evidence write has completed. */
+    public void preparedCopy(long id, long preparedEntries, long originalEntries) throws SQLException {
+        if (preparedEntries < 1 || originalEntries < 0) throw new SQLException("Invalid copy evidence count");
+        try (Connection connection = database.getConnection(); PreparedStatement update = connection.prepareStatement(
+                "UPDATE atlas_world_copy c SET phase = 'PREPARED', prepared_entries = ?, original_entries = ? "
+                        + "WHERE server = ? AND operation_id = ? AND phase = 'COPYING' "
+                        + "AND (SELECT COUNT(*) FROM atlas_world_copy_entry e WHERE e.server = c.server "
+                        + "AND e.operation_id = c.operation_id AND e.tree_kind = 'PREPARED') = ? "
+                        + "AND (SELECT COUNT(*) FROM atlas_world_copy_entry e WHERE e.server = c.server "
+                        + "AND e.operation_id = c.operation_id AND e.tree_kind = 'ORIGINAL') = ?")) {
+            update.setLong(1, preparedEntries);
+            update.setLong(2, originalEntries);
+            update.setString(3, server);
+            update.setLong(4, id);
+            update.setLong(5, preparedEntries);
+            update.setLong(6, originalEntries);
+            if (update.executeUpdate() != 1) throw new SQLException("Copy manifest is incomplete");
+        }
+    }
+
+    /** Atomically enables a proven publication, completes the pending row, and seals its receipt. */
+    public void completeCopy(PendingOperation operation) throws SQLException {
+        try (Connection connection = database.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                WorldCopyState state = copyState(connection, operation.id(), true).orElseThrow(
+                        () -> new SQLException("Copy evidence missing"));
+                if (state.phase() != WorldCopyState.Phase.PUBLISHED) throw new SQLException("Copy not published");
+                if (!setEnabled(connection, operation.world(), state.activateAfterCopy()))
+                    throw new SQLException("Copy target row missing");
+                if (!finish(connection, operation.id(), true, operation.kind().name().toLowerCase(Locale.ROOT)))
+                    throw new SQLException("Pending copy changed");
+                try (PreparedStatement update = connection.prepareStatement(
+                        "UPDATE atlas_world_copy SET phase = 'APPLIED' WHERE server = ? AND operation_id = ? AND phase = 'PUBLISHED'")) {
+                    update.setString(1, server);
+                    update.setLong(2, operation.id());
+                    if (update.executeUpdate() != 1) throw new SQLException("Published copy changed");
+                }
+                connection.commit();
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
+            }
+        }
+    }
+
+    /** Preserves all evidence and keeps the world undeclared; never guesses a rollback. */
+    public void uncertainCopy(PendingOperation operation, String reason) throws SQLException {
+        try (Connection connection = database.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                if (!setEnabled(connection, operation.world(), false)) throw new SQLException("Uncertain target row missing");
+                try (PreparedStatement update = connection.prepareStatement(
+                        "UPDATE atlas_world_copy SET phase = 'UNCERTAIN' WHERE server = ? AND operation_id = ? "
+                                + "AND phase NOT IN ('APPLIED', 'CANCELLED')")) {
+                    update.setString(1, server);
+                    update.setLong(2, operation.id());
+                    if (update.executeUpdate() != 1) throw new SQLException("Uncertain copy evidence missing");
+                }
+                if (!finish(connection, operation.id(), false, reason)) throw new SQLException("Uncertain operation changed");
+                connection.commit();
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
+            }
+        }
+    }
+
+    /** Isolates a legacy copy without fabricating proof or changing any filesystem content. */
+    public void rejectLegacyCopy(PendingOperation operation) throws SQLException {
+        try (Connection connection = database.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                if (copyState(connection, operation.id(), true).isPresent()) throw new SQLException("Legacy operation changed");
+                boolean enabled;
+                try (PreparedStatement query = connection.prepareStatement(
+                        "SELECT enabled, generator FROM atlas_world WHERE server = ? AND world = ? FOR UPDATE")) {
+                    query.setString(1, server);
+                    query.setString(2, operation.world());
+                    try (ResultSet row = query.executeQuery()) {
+                        if (!row.next() || row.getString("generator") == null) throw new SQLException("Legacy target unavailable");
+                        enabled = row.getBoolean("enabled");
+                    }
+                }
+                insertCopy(connection, operation.id(), operation.world(), operation.source().orElseThrow(), enabled);
+                setEnabled(connection, operation.world(), false);
+                try (PreparedStatement update = connection.prepareStatement(
+                        "UPDATE atlas_world_copy SET phase = 'UNCERTAIN' WHERE server = ? AND operation_id = ?")) {
+                    update.setString(1, server);
+                    update.setLong(2, operation.id());
+                    update.executeUpdate();
+                }
+                if (!finish(connection, operation.id(), false, "UNCERTAIN")) throw new SQLException("Legacy operation changed");
+                connection.commit();
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
+            }
+        }
+    }
+
+    private static void checkTree(String tree) {
+        if (!tree.equals("PREPARED") && !tree.equals("ORIGINAL")) throw new IllegalArgumentException("Invalid evidence tree");
+    }
+
+    private static String pathHash(String path) {
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(path.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
     }
 
     // ---- Portals ------------------------------------------------------------------------------

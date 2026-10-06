@@ -92,9 +92,8 @@ final class AtlasRepositoryMariaDbTest {
             Path template = dimensions.resolve("atlas/arena/region");
             Files.createDirectories(template);
             Files.writeString(template.resolve("r.0.0.mca"), "template");
-            assertTrue(repository.insertWorld("atlas:copy", WorldGenerator.VOID, Optional.of("atlas:arena")));
-            repository.queue(PendingOperation.Kind.CLONE, "atlas:copy", Optional.of("atlas:arena"), player);
-            long cancelled = repository.queue(PendingOperation.Kind.RESET, "atlas:copy", Optional.of("atlas:arena"), player);
+            assertTrue(repository.insertAndQueueClone("atlas:copy", WorldGenerator.VOID, "atlas:arena", player));
+            long cancelled = repository.queueReset("atlas:arena", "atlas:template", player);
             assertTrue(repository.cancel(cancelled).isPresent());
             repository.setEnabled("atlas:arena", false);
             repository.queue(PendingOperation.Kind.DELETE, "atlas:arena", Optional.empty(), player);

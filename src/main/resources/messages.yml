@@ -45,10 +45,10 @@ world:
   disabled: "World <#F3E5AB><world></#F3E5AB> is disabled. It stays loaded until the next server start."
   delete-queued: "World <#F3E5AB><world></#F3E5AB> is disabled and its folder is deleted at the next server start."
   # <source>: the world that is copied
-  clone-queued: "World <#F3E5AB><world></#F3E5AB> is declared as a copy of <#F3E5AB><source></#F3E5AB>. The copy is made at the next server start."
-  reset-queued: "World <#F3E5AB><world></#F3E5AB> is reset from its source at the next server start."
+  clone-queued: "Copy of <#F3E5AB><source></#F3E5AB> queued for <#F3E5AB><world></#F3E5AB>. The next server start prepares it; the following start loads it."
+  reset-queued: "Reset queued for <#F3E5AB><world></#F3E5AB>. The next server start prepares it; the following start loads it."
   confirm-delete: "This deletes <#F3E5AB><world></#F3E5AB> permanently at the next server start. Repeat with <#A8D5A2>confirm</#A8D5A2> at the end to continue."
-  confirm-reset: "This replaces <#F3E5AB><world></#F3E5AB> with a fresh copy at the next server start. Repeat with <#A8D5A2>confirm</#A8D5A2> at the end to continue."
+  confirm-reset: "This replaces <#F3E5AB><world></#F3E5AB> with a fresh copy. Preparation and activation require two server starts. Repeat with <#A8D5A2>confirm</#A8D5A2> at the end to continue."
   pending-empty: "No world operations are waiting for the next server start."
   # <kind>: delete, clone or reset; <source>: '-' when none
   pending-entry: "<#F3E5AB>#<id></#F3E5AB> <kind> <#F3E5AB><world></#F3E5AB> (<#F3E5AB>source</#F3E5AB> <#F3E5AB><source></#F3E5AB>)"

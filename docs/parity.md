@@ -11,8 +11,8 @@ Source inventory: `.research/atlas/feature-review.md` (PixelWorlds `4fd52b9`). O
 | 4 | `/pw load`, auto-load | `/atlas world enable`; every enabled world loads at startup. | Changed (D1) |
 | 5 | `/pw unload [save\|nosave]` | `/atlas world disable`; unloads at the next start (Minecraft saves normally). Keep-loaded regions still block it; portals now block it too. | Changed (D1) |
 | 6 | `/pw delete … confirm` | `/atlas world delete … confirm`; folder deleted at the next start. Same guards. | Changed (D1) |
-| 7 | `/pw clone` | `/atlas world clone`; copied at startup from an unloaded source (fixes the inconsistent live copy). Paper's world identity is not copied. | Kept, improved |
-| 8 | `/pw reset … confirm` | `/atlas world reset … confirm`; copy is made beside the target and swapped in only after success. | Kept, improved |
+| 7 | `/pw clone` | `/atlas world clone`; copied at startup from an unloaded source (fixes the inconsistent live copy). Paper's world identity is not copied. Preparation and activation use two starts with durable evidence. | Kept, improved |
+| 8 | `/pw reset … confirm` | `/atlas world reset … confirm`; copy is prepared beside the undeclared target, checksum-verified and published with atomic moves; original retained. Activation follows on the next start. See [recovery](world-recovery.md). | Kept, improved |
 | 9 | `/pw tp <world> [player]` | `/atlas tp`; one async teleport, no fallback chain, no console logging (D8). The world must already be loaded (no on-demand loading on Veyra). | Changed (D8) |
 | 10 | `/pw spawn [world] [player]` | `/atlas spawn`. | Kept |
 | 11 | `/pw setspawn [world]` | `/atlas setspawn`; must be run in the world itself (the old command stored another world's coordinates). Stored spawn keeps its own direction. | Kept, fixed |

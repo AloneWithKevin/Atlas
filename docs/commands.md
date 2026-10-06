@@ -7,7 +7,7 @@ Every command is `/atlas …` and requires `atlas.admin`. World arguments accept
 ## Worlds
 
 World changes are written to MariaDB and the Atlas data pack at once, but Minecraft only loads
-dimensions at startup. A change therefore takes effect at the **next server start**.
+dimensions at startup. Create/import and enable/disable take effect at the **next server start**. Clone/reset use a preparation start followed by an activation start; an already disabled reset stays disabled. See [world recovery](world-recovery.md).
 
 | Command | What it does |
 | --- | --- |
@@ -16,10 +16,10 @@ dimensions at startup. A change therefore takes effect at the **next server star
 | `/atlas world import <name> <generator>` | Declares a world whose folder staff placed in `<level>/dimensions/atlas/<name>`. The generator is used for chunks that do not exist yet. |
 | `/atlas world enable <world>` / `disable <world>` | Declares or undeclares an Atlas world from the next start. Disabling is refused while portals or keep-loaded regions are in the world. Players inside a removed world are moved to the overworld spawn by Minecraft. |
 | `/atlas world delete <world> confirm` | Disables the world now and deletes its folder at the next start. Refused for vanilla dimensions and while portals or keep-loaded regions remain. |
-| `/atlas world clone <source> <name>` | Declares a new world as a copy of `source` (any world whose folder exists, including the vanilla ones). The folder is copied at the next start, while nothing is loaded, so the copy is consistent. The new world remembers `source` as its reset source. |
-| `/atlas world reset <world> [source] confirm` | Replaces an Atlas world with a fresh copy of `source` (default: its reset source) at the next start. The old folder is replaced only after the copy succeeded. Refused while keep-loaded regions are in the world. |
+| `/atlas world clone <source> <name>` | Declares a new world as a copy of `source` (any world whose folder exists, including the vanilla ones). The folder is copied at the next start, while nothing is loaded, so the copy is consistent. The new world remembers `source` as its reset source. It stays undeclared while preparing and loads at the following start. |
+| `/atlas world reset <world> [source] confirm` | Replaces an Atlas world with a fresh copy of `source` (default: its reset source) at the next start. The old folder is retained separately; publication requires complete checksum evidence. The target loads at the following start. Refused while keep-loaded regions are in the world. |
 | `/atlas world pending` | Lists queued delete, clone and reset operations. |
-| `/atlas world cancel <id>` | Cancels a queued operation and undoes what it declared (a cancelled clone removes the new world, a cancelled delete re-enables the world). |
+| `/atlas world cancel <id>` | Cancels a queued operation and undoes what it declared (a cancelled clone removes the new world, a cancelled delete re-enables the world, a cancelled reset restores its prior enabled state). Clone/reset cancellation is refused once preparation starts. |
 
 ## Information and teleports
 

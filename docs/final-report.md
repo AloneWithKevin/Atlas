@@ -1,5 +1,15 @@
 # Atlas final report
 
+Atlas 0.1.5 (2026-10-06) adds atomic lifecycle queue/cancellation and bounded,
+checksum-verified clone/reset preparation. Proven publication resumes after an
+interruption; uncertain trees stay disabled and original reset data is retained.
+Preparation and activation use separate starts. Early startup failure uses generic
+bundled console text without exposing exception details. Three lifecycle messages
+were explicitly approved on 2026-10-06; remaining text review stays open.
+The complete isolated MariaDB build passes 64 tests without skips. Public API,
+configuration keys, permissions and content assets are unchanged. See
+[world recovery](world-recovery.md) and [verification](verification.md).
+
 Atlas 0.1.4 (2026-10-06) makes the four ordinary player portal messages friendlier
 and moves content documentation outside Closet's validated asset root.
 Atlas 0.1.3 (2026-10-05) adds a registered selector mini-glyph to the 0.1.2 message-palette

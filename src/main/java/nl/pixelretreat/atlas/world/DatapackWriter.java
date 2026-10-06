@@ -62,6 +62,23 @@ public final class DatapackWriter {
         return files;
     }
 
+    /** Conservatively defers folder mutation when the startup pack still declares that dimension. */
+    public Set<String> declaredWorlds() throws IOException {
+        Set<String> keys = new HashSet<>();
+        Path directory = packRoot.resolve("data").resolve(WorldNames.NAMESPACE).resolve("dimension");
+        if (Files.isDirectory(directory)) {
+            try (var files = Files.newDirectoryStream(directory, "*.json")) {
+                for (Path file : files) {
+                    String name = file.getFileName().toString();
+                    String shortName = name.substring(0, name.length() - ".json".length());
+                    if (!WorldNames.isNewWorldName(shortName)) throw new IOException("Invalid Atlas dimension declaration");
+                    keys.add(WorldNames.NAMESPACE + ":" + shortName);
+                }
+            }
+        }
+        return Set.copyOf(keys);
+    }
+
     /**
      * Makes the pack on disk match the worlds. Returns whether anything changed, which means the
      * world set differs from what is loaded until the next start.
