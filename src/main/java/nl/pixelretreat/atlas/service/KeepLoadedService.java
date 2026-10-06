@@ -9,6 +9,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.Callable;
 import nl.pixelretreat.atlas.keeploaded.KeepLoadedRegion;
 import nl.pixelretreat.atlas.storage.AtlasRepository;
 import org.bukkit.NamespacedKey;
@@ -24,8 +28,13 @@ public final class KeepLoadedService {
     private final AtlasRepository repository;
     private final AtlasWorkers workers;
     private final AtomicReference<List<KeepLoadedRegion>> regions = new AtomicReference<>(List.of());
-    /** World key → chunk keys holding an Atlas ticket. Global region thread only. */
+    /** World key → chunk keys holding an Atlas ticket. Guarded by ticketLock. */
     private final Map<String, Set<Long>> ticketed = new HashMap<>();
+    private final Object ticketLock = new Object();
+    private final AtomicLong loadRevision = new AtomicLong();
+    private final Set<CompletableFuture<Void>> pending = ConcurrentHashMap.newKeySet();
+    private boolean closed; // ticketLock
+    private record Loaded(List<KeepLoadedRegion> regions, Map<String, Set<Long>> desired) { }
 
     public KeepLoadedService(Plugin plugin, AtlasRepository repository, AtlasWorkers workers) {
         this.plugin = plugin;
@@ -35,20 +44,31 @@ public final class KeepLoadedService {
 
     /** Loads the regions and reconciles every world's tickets. */
     public CompletableFuture<Void> reload() {
-        return workers.submit(repository::loadRegions).thenAccept(loaded -> {
-            regions.set(List.copyOf(loaded));
-            reconcile();
+        synchronized (ticketLock) {
+            if (closed) return CompletableFuture.failedFuture(new CancellationException());
+        }
+        long revision = loadRevision.incrementAndGet();
+        return submitOpen(() -> {
+            List<KeepLoadedRegion> loaded = List.copyOf(repository.loadRegions());
+            return new Loaded(loaded, desired(loaded));
+        }).thenCompose(loaded -> {
+            synchronized (ticketLock) {
+                if (closed) return CompletableFuture.failedFuture(new CancellationException());
+                if (revision != loadRevision.get()) return CompletableFuture.completedFuture(null);
+                regions.set(loaded.regions());
+                return reconcile(loaded.desired(), revision);
+            }
         });
     }
 
     /** Saves a region and applies it. */
     public CompletableFuture<Void> save(KeepLoadedRegion region) {
-        return workers.submit(() -> { repository.saveRegion(region); return null; }).thenCompose(ignored -> reload());
+        return submitOpen(() -> { repository.saveRegion(region); return null; }).thenCompose(ignored -> reload());
     }
 
     /** Deletes a region; completes with whether it existed. */
     public CompletableFuture<Boolean> delete(String name) {
-        return workers.submit(() -> repository.deleteRegion(name))
+        return submitOpen(() -> repository.deleteRegion(name))
                 .thenCompose(deleted -> reload().thenApply(ignored -> deleted));
     }
 
@@ -64,45 +84,75 @@ public final class KeepLoadedService {
 
     /** Number of chunk tickets Atlas currently holds. Global region thread for an exact value. */
     public int ticketCount() {
-        return ticketed.values().stream().mapToInt(Set::size).sum();
+        synchronized (ticketLock) { return ticketed.values().stream().mapToInt(Set::size).sum(); }
     }
 
-    private void reconcile() {
-        plugin.getServer().getGlobalRegionScheduler().run(plugin, task -> {
-            Map<String, Set<Long>> desired = desired(regions.get());
-            Set<String> worldKeys = new HashSet<>(desired.keySet());
-            worldKeys.addAll(ticketed.keySet());
-            for (String worldKey : worldKeys) {
-                World world = plugin.getServer().getWorld(NamespacedKey.fromString(worldKey));
-                if (world == null) { ticketed.remove(worldKey); continue; }
-                Set<Long> want = desired.getOrDefault(worldKey, Set.of());
-                Set<Long> have = ticketed.computeIfAbsent(worldKey, ignored -> new HashSet<>());
-                for (Long chunk : List.copyOf(have)) {
-                    if (want.contains(chunk)) continue;
-                    world.removePluginChunkTicket(chunkX(chunk), chunkZ(chunk), plugin);
-                    have.remove(chunk);
-                }
-                for (Long chunk : want) {
-                    if (have.contains(chunk)) continue;
-                    if (world.addPluginChunkTicket(chunkX(chunk), chunkZ(chunk), plugin)) have.add(chunk);
-                }
-                if (have.isEmpty()) ticketed.remove(worldKey);
+    private CompletableFuture<Void> reconcile(Map<String, Set<Long>> desired, long revision) {
+        var result = new CompletableFuture<Void>();
+        pending.add(result);
+        result.whenComplete((ignored, failure) -> pending.remove(result));
+        try {
+            plugin.getServer().getGlobalRegionScheduler().run(plugin, task -> {
+                try {
+                    synchronized (ticketLock) {
+                        if (closed) throw new CancellationException();
+                        if (revision == loadRevision.get()) reconcileNow(desired);
+                    }
+                    result.complete(null);
+                } catch (Throwable failure) { result.completeExceptionally(failure); }
+            });
+        } catch (RuntimeException rejected) { result.completeExceptionally(rejected); }
+        return result;
+    }
+
+    private void reconcileNow(Map<String, Set<Long>> desired) {
+        Set<String> worldKeys = new HashSet<>(desired.keySet());
+        worldKeys.addAll(ticketed.keySet());
+        for (String worldKey : worldKeys) {
+            World world = plugin.getServer().getWorld(NamespacedKey.fromString(worldKey));
+            if (world == null) { ticketed.remove(worldKey); continue; }
+            Set<Long> want = desired.getOrDefault(worldKey, Set.of());
+            Set<Long> have = ticketed.computeIfAbsent(worldKey, ignored -> new HashSet<>());
+            for (Long chunk : List.copyOf(have)) {
+                if (want.contains(chunk)) continue;
+                world.removePluginChunkTicket(chunkX(chunk), chunkZ(chunk), plugin);
+                have.remove(chunk);
             }
-        });
+            for (Long chunk : want) {
+                if (have.contains(chunk)) continue;
+                if (world.addPluginChunkTicket(chunkX(chunk), chunkZ(chunk), plugin)) have.add(chunk);
+            }
+            if (have.isEmpty()) ticketed.remove(worldKey);
+        }
     }
 
     /** Releases every ticket; called from onDisable. */
     public void releaseAll() {
-        for (World world : plugin.getServer().getWorlds()) world.removePluginChunkTickets(plugin);
-        ticketed.clear();
+        try {
+            synchronized (ticketLock) {
+                closed = true;
+                try {
+                    for (World world : plugin.getServer().getWorlds()) world.removePluginChunkTickets(plugin);
+                } finally { ticketed.clear(); }
+            }
+        } finally {
+            for (var result : pending) result.completeExceptionally(new CancellationException());
+        }
+    }
+
+    private <T> CompletableFuture<T> submitOpen(Callable<T> task) {
+        synchronized (ticketLock) {
+            if (closed) return CompletableFuture.failedFuture(new CancellationException());
+            return workers.submit(task);
+        }
     }
 
     static Map<String, Set<Long>> desired(Collection<KeepLoadedRegion> regions) {
         Map<String, Set<Long>> desired = new HashMap<>();
         for (KeepLoadedRegion region : regions) {
             Set<Long> chunks = desired.computeIfAbsent(region.world(), ignored -> new HashSet<>());
-            for (int x = region.minChunkX(); x <= region.maxChunkX(); x++) {
-                for (int z = region.minChunkZ(); z <= region.maxChunkZ(); z++) chunks.add(chunkKey(x, z));
+            for (long x = region.minChunkX(); x <= region.maxChunkX(); x++) {
+                for (long z = region.minChunkZ(); z <= region.maxChunkZ(); z++) chunks.add(chunkKey((int) x, (int) z));
             }
         }
         return desired;

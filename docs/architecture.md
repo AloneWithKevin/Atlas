@@ -57,6 +57,17 @@ bounded copy workers and retained original trees.
 Results return to the owning thread through the schedulers; no game thread waits on a future.
 `onDisable` releases all chunk tickets, stops the workers and closes the pool.
 
+Region rectangle expansion runs on the bounded workers. Reload completes after the
+global scheduler reconciles Atlas tickets, or reports a scheduling/ticket failure.
+Revision checks discard older database reads. Ticket bookkeeping and terminal
+cleanup share a lock; delayed callbacks cannot re-add tickets after shutdown.
+Cleanup settles pending reconciliation results even when ticket removal throws.
+Closed region services refuse new saves/deletions. Work accepted before shutdown
+may already have committed; cancellation is not a database rollback.
+Worker shutdown settles jobs removed from the queue and interrupts active jobs.
+An active job's future completes when its call actually returns or throws.
+Ticket registration does not guarantee the chunk is already physically loaded.
+
 Until the rules are loaded, guarded gameplay (block changes, damage, drops, spawns) is refused,
 and `/atlas` is not yet registered. If startup fails, Atlas logs one line and disables itself.
 

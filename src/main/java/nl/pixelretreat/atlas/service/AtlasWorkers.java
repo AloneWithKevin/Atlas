@@ -22,18 +22,31 @@ public final class AtlasWorkers implements AutoCloseable {
 
     /** Runs a task off every game thread and completes the future with its result. */
     public <T> CompletableFuture<T> submit(Callable<T> task) {
-        var future = new CompletableFuture<T>();
+        var work = new Work<>(task);
         try {
-            executor.execute(() -> {
-                try { future.complete(task.call()); }
-                catch (Throwable failure) { future.completeExceptionally(failure); }
-            });
+            executor.execute(work);
         } catch (RuntimeException rejected) {
-            future.completeExceptionally(rejected);
+            work.future.completeExceptionally(rejected);
         }
-        return future;
+        return work.future;
     }
 
-    /** Stops accepting work and interrupts what is queued. */
-    @Override public void close() { executor.shutdownNow(); }
+    /** Rejects future submissions, settles dropped work and interrupts active calls. */
+    @Override public void close() {
+        for (Runnable dropped : executor.shutdownNow()) {
+            if (dropped instanceof Work<?> work)
+                work.future.completeExceptionally(new java.util.concurrent.CancellationException());
+        }
+    }
+
+    private static final class Work<T> implements Runnable {
+        private final Callable<T> call;
+        private final CompletableFuture<T> future = new CompletableFuture<>();
+        private Work(Callable<T> call) { this.call = call; }
+        @Override public void run() {
+            if (future.isDone()) return;
+            try { future.complete(call.call()); }
+            catch (Throwable failure) { future.completeExceptionally(failure); }
+        }
+    }
 }

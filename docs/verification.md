@@ -1,5 +1,21 @@
 # Verification
 
+## 2026-10-06, Atlas 0.1.8 region/worker lifecycle
+
+Java 25 targeted test/runtime/API build passes **6 tests, zero failures/errors/skips**:
+`test --tests *AtlasWorkersTest --tests *KeepLoadedServiceTest shadowJar apiJar --offline`.
+Cases cover queue saturation, dropped queued work, active interruption without
+premature completion, post-close rejection, delayed global callbacks after cleanup,
+overlap deduplication/removal, stale database reads, scheduler/ticket/cleanup failures
+and the maximum integer chunk coordinate. The first run identified an incorrect
+test expectation for a composed cancellation future; the corrected rerun passes.
+
+The 0.1.7 full-suite baseline remains the evidence for unchanged database, travel,
+copy recovery and catalog contracts; it was not repeated for this targeted fix.
+No new database schema, configuration, messages, content or public API changes.
+Scheduler mocks prove ordering/result handling; actual world loading, restart and
+game acceptance still require the owner's bundled in-game round.
+
 ## 2026-10-06, Atlas 0.1.7 catalog bindings
 
 Full Java 25 clean test shadowJar apiJar offline build passes **69 tests, 0 failures,
