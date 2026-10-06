@@ -9,14 +9,14 @@ startup:
 delivery:
   failed: "<#F3E5AB>Atlas</#F3E5AB> could not deliver a message through Campfire."
 common:
-  permission: "You do not have permission to use that."
-  players-only: "Only players can use this."
+  permission: "Oops! You don't have permission to use that."
+  players-only: "Hop in-game to use this; it's for players only."
   # <world>: what was typed
-  unknown-world: "<#F3E5AB><world></#F3E5AB> is not a valid world name."
-  not-loaded: "World <#F3E5AB><world></#F3E5AB> is not loaded on this server."
+  unknown-world: "Oops! <#F3E5AB><world></#F3E5AB> is not a valid world name."
+  not-loaded: "Oops! World <#F3E5AB><world></#F3E5AB> is not loaded on this server."
   # <player>: the name that was typed
-  player-offline: "<#F3E5AB><player></#F3E5AB> is not online on this server."
-  failed: "That did not work. <#A8D5A2>Check the console</#A8D5A2> or <#A8D5A2>try again shortly</#A8D5A2>."
+  player-offline: "Looks like <#F3E5AB><player></#F3E5AB> is not online on this server."
+  failed: "Whoops, that did not work. <#A8D5A2>Check the console</#A8D5A2> or <#A8D5A2>try again shortly</#A8D5A2>."
   invalid-name: "<#A8D5A2>Use a name of 1–48 lowercase letters, numbers, underscores or hyphens</#A8D5A2>."
 help:
   lines: |-
@@ -38,10 +38,10 @@ usage:
   portal: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas portal create {name} {world} | delete {name} | list | info {name} | target {name} (spawn {world} | here | server {region} {world} [x y z [yaw pitch]]) | cooldown {name} {millis} | sound {name} {key|none} | particle {name} {particle|none} | restrict {name} {on|off} | fill {name} {block|none}</#A8D5A2>"
   keeploaded: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas keeploaded set {name} | delete {name} | list</#A8D5A2>"
 world:
-  unknown-generator: "Unknown generator. Use <#A8D5A2>normal, flat, void, nether or end</#A8D5A2>."
-  created: "World <#F3E5AB><world></#F3E5AB> is declared. It is generated and loaded at the next server start."
-  imported: "World <#F3E5AB><world></#F3E5AB> is declared from its existing folder. It is loaded at the next server start."
-  enabled: "World <#F3E5AB><world></#F3E5AB> is enabled. It is loaded from the next server start."
+  unknown-generator: "Oops, that generator is unknown. Use <#A8D5A2>normal, flat, void, nether or end</#A8D5A2>."
+  created: "All set! World <#F3E5AB><world></#F3E5AB> is declared. It is generated and loaded at the next server start."
+  imported: "All set! World <#F3E5AB><world></#F3E5AB> is declared from its existing folder. It is loaded at the next server start."
+  enabled: "All set! World <#F3E5AB><world></#F3E5AB> is enabled. It is loaded from the next server start."
   disabled: "World <#F3E5AB><world></#F3E5AB> is disabled. It stays loaded until the next server start."
   delete-queued: "World <#F3E5AB><world></#F3E5AB> is disabled and its folder is deleted at the next server start."
   # <source>: the world that is copied
@@ -49,11 +49,11 @@ world:
   reset-queued: "Reset queued for <#F3E5AB><world></#F3E5AB>. The next server start prepares it; the following start loads it."
   confirm-delete: "This deletes <#F3E5AB><world></#F3E5AB> permanently at the next server start. Repeat with <#A8D5A2>confirm</#A8D5A2> at the end to continue."
   confirm-reset: "This replaces <#F3E5AB><world></#F3E5AB> with a fresh copy. Preparation and activation require two server starts. Repeat with <#A8D5A2>confirm</#A8D5A2> at the end to continue."
-  pending-empty: "No world operations are waiting for the next server start."
+  pending-empty: "All clear! No world operations are waiting for the next server start."
   # <kind>: delete, clone or reset; <source>: '-' when none
   pending-entry: "<#F3E5AB>#<id></#F3E5AB> <kind> <#F3E5AB><world></#F3E5AB> (<#F3E5AB>source</#F3E5AB> <#F3E5AB><source></#F3E5AB>)"
-  cancelled: "Queued operation <#F3E5AB>#<id></#F3E5AB> is cancelled."
-  operation-not-found: "There is no queued operation <#F3E5AB>#<id></#F3E5AB>."
+  cancelled: "All set! Queued operation <#F3E5AB>#<id></#F3E5AB> is cancelled."
+  operation-not-found: "Oops! There is no queued operation <#F3E5AB>#<id></#F3E5AB>."
   # <generator>: normal, flat, void, nether, end or vanilla
   state-loaded: "<#F3E5AB><world></#F3E5AB> (<generator>) — loaded"
   state-pending: "<#F3E5AB><world></#F3E5AB> (<generator>) — loads at the next start"
@@ -62,15 +62,15 @@ world:
   error:
     unknown-world: "<#F3E5AB><world></#F3E5AB> is not an Atlas world on this server."
     built-in: "<#F3E5AB><world></#F3E5AB> is a vanilla dimension and cannot be changed this way."
-    already-exists: "A world named <#F3E5AB><world></#F3E5AB> already exists."
-    folder-exists: "A folder for <#F3E5AB><world></#F3E5AB> already exists. Use <#A8D5A2>import</#A8D5A2> instead."
-    folder-missing: "There is no folder for <#F3E5AB><world></#F3E5AB> to import."
+    already-exists: "Oops! A world named <#F3E5AB><world></#F3E5AB> already exists."
+    folder-exists: "Oops! A folder for <#F3E5AB><world></#F3E5AB> already exists. Use <#A8D5A2>import</#A8D5A2> instead."
+    folder-missing: "Oops! There is no folder for <#F3E5AB><world></#F3E5AB> to import."
     has-portals: "<#F3E5AB><world></#F3E5AB> still has portals. <#A8D5A2>Delete them first</#A8D5A2>."
     has-regions: "<#F3E5AB><world></#F3E5AB> still has keep-loaded regions. <#A8D5A2>Delete them first</#A8D5A2>."
-    no-source: "<#F3E5AB><world></#F3E5AB> has no reset source. <#A8D5A2>Name one explicitly</#A8D5A2>."
-    same-world: "<#F3E5AB><world></#F3E5AB> cannot be copied onto itself."
-    already-enabled: "<#F3E5AB><world></#F3E5AB> is already enabled."
-    already-disabled: "<#F3E5AB><world></#F3E5AB> is already disabled."
+    no-source: "Oops! <#F3E5AB><world></#F3E5AB> has no reset source. <#A8D5A2>Name one explicitly</#A8D5A2>."
+    same-world: "Oops! <#F3E5AB><world></#F3E5AB> cannot be copied onto itself."
+    already-enabled: "Already set! <#F3E5AB><world></#F3E5AB> is already enabled."
+    already-disabled: "Already set! <#F3E5AB><world></#F3E5AB> is already disabled."
     not-found: "Nothing was found for <#F3E5AB><world></#F3E5AB>."
 info:
   header: "<#F3E5AB>World</#F3E5AB> <#F3E5AB><world></#F3E5AB>"
@@ -79,36 +79,36 @@ info:
   # <flags>: key=value pairs; * marks an override of the default
   flags: "<#F3E5AB>Flags:</#F3E5AB> <flags>"
 teleport:
-  failed: "The teleport to <#F3E5AB><world></#F3E5AB> did not work."
-  arrived: "Teleported to <#F3E5AB><world></#F3E5AB>."
-  sent: "Teleported <#F3E5AB><player></#F3E5AB> to <#F3E5AB><world></#F3E5AB>."
+  failed: "Whoops! The teleport to <#F3E5AB><world></#F3E5AB> did not work."
+  arrived: "Whoosh! You've arrived in <#F3E5AB><world></#F3E5AB>."
+  sent: "Whoosh! Teleported <#F3E5AB><player></#F3E5AB> to <#F3E5AB><world></#F3E5AB>."
 spawn:
   wrong-world: "Stand in the world whose spawn you want to set."
-  set: "Spawn of <#F3E5AB><world></#F3E5AB> set to your position."
+  set: "All set! Spawn of <#F3E5AB><world></#F3E5AB> set to your position."
 flag:
   # <flags>: every valid flag key
   unknown: "Unknown flag. Use one of: <#A8D5A2><flags></#A8D5A2>"
   # <value>: on, off or default
   set: "<#F3E5AB><flag></#F3E5AB> in <#F3E5AB><world></#F3E5AB> is now <value>."
 setting:
-  invalid: "That is not a valid value for <#F3E5AB><setting></#F3E5AB>."
+  invalid: "Oops! That is not a valid value for <#F3E5AB><setting></#F3E5AB>."
   set: "<#F3E5AB><setting></#F3E5AB> in <#F3E5AB><world></#F3E5AB> is now <value>."
 selector:
-  given: "<#F3E5AB>Atlas selector</#F3E5AB> delivered. <#A8D5A2>Left-click a block</#A8D5A2> for corner 1, <#A8D5A2>right-click</#A8D5A2> for corner 2."
-  pending: "The <#F3E5AB>Atlas selector</#F3E5AB> delivery is unresolved. <#A8D5A2>Check your inventory</#A8D5A2> before trying again."
-  first: "<#F3E5AB>Corner 1</#F3E5AB> set to <x>, <y>, <z> in <#F3E5AB><world></#F3E5AB>."
-  second: "<#F3E5AB>Corner 2</#F3E5AB> set to <x>, <y>, <z> in <#F3E5AB><world></#F3E5AB>."
+  given: "Ready to map things out? <#F3E5AB>Atlas selector</#F3E5AB> delivered. <#A8D5A2>Left-click a block</#A8D5A2> for corner 1, <#A8D5A2>right-click</#A8D5A2> for corner 2."
+  pending: "Your <#F3E5AB>Atlas selector</#F3E5AB> delivery is still unresolved. <#A8D5A2>Check your inventory</#A8D5A2> before trying again."
+  first: "Nice! <#F3E5AB>Corner 1</#F3E5AB> set to <x>, <y>, <z> in <#F3E5AB><world></#F3E5AB>."
+  second: "Nice! <#F3E5AB>Corner 2</#F3E5AB> set to <x>, <y>, <z> in <#F3E5AB><world></#F3E5AB>."
 selection:
   missing: "<#A8D5A2>Select two corners</#A8D5A2> with the <#F3E5AB>Atlas selector</#F3E5AB> first."
-  different-worlds: "Both corners must be in the same world."
+  different-worlds: "Oops! Both corners must be in the same world."
 portal:
   list-empty: "There are no portals on this server."
   # <target>: destination description
   list-entry: "<#F3E5AB><portal></#F3E5AB> in <#F3E5AB><world></#F3E5AB> → <#F3E5AB><target></#F3E5AB>"
-  created: "Portal <#F3E5AB><portal></#F3E5AB> created. It leads to the spawn of <#F3E5AB><world></#F3E5AB>."
-  exists: "A portal named <#F3E5AB><portal></#F3E5AB> already exists."
-  deleted: "Portal <#F3E5AB><portal></#F3E5AB> deleted."
-  not-found: "There is no portal named <#F3E5AB><portal></#F3E5AB>."
+  created: "All set! Portal <#F3E5AB><portal></#F3E5AB> created. It leads to the spawn of <#F3E5AB><world></#F3E5AB>."
+  exists: "Oops! A portal named <#F3E5AB><portal></#F3E5AB> already exists."
+  deleted: "All set! Portal <#F3E5AB><portal></#F3E5AB> deleted."
+  not-found: "Oops! There is no portal named <#F3E5AB><portal></#F3E5AB>."
   info: "<#F3E5AB><portal></#F3E5AB> in <#F3E5AB><world></#F3E5AB> at <bounds> → <#F3E5AB><target></#F3E5AB> · <#F3E5AB>cooldown</#F3E5AB> <cooldown> ms · <#F3E5AB>sound</#F3E5AB> <sound> · <#F3E5AB>particle</#F3E5AB> <particle> · <#F3E5AB>restricted</#F3E5AB> <restricted> · <#F3E5AB>fill</#F3E5AB> <fill>"
   cooldown-set: "Cooldown of <#F3E5AB><portal></#F3E5AB> set to <millis> ms."
   invalid-sound: "Use a namespaced sound key such as <#A8D5A2>minecraft:block.portal.travel</#A8D5A2>, or <#A8D5A2>none</#A8D5A2>."
@@ -118,10 +118,10 @@ portal:
   # <permission>: node required while restricted
   restrict-set: "Restriction of <#F3E5AB><portal></#F3E5AB> is <value>. Restricted portals need <#F3E5AB><permission></#F3E5AB>."
   invalid-block: "Use a <#A8D5A2>placeable block</#A8D5A2>, or <#A8D5A2>none</#A8D5A2>."
-  fill-too-large: "This portal is too large to fill. The maximum is <max> blocks."
+  fill-too-large: "Oops! This portal is too large to fill. The maximum is <max> blocks."
   fill-set: "Fill of <#F3E5AB><portal></#F3E5AB> set to <block>."
   invalid-region: "Cross-server portals can only lead to the other region."
-  target-set: "Portal <#F3E5AB><portal></#F3E5AB> now leads to <#F3E5AB><target></#F3E5AB>."
+  target-set: "All set! Portal <#F3E5AB><portal></#F3E5AB> now leads to <#F3E5AB><target></#F3E5AB>."
   # <region>: EU or NA
   switching: "Off we go! Travelling to <#F3E5AB><region></#F3E5AB>…"
   target-missing: "Oops! <#F3E5AB><world></#F3E5AB> isn't loaded right now. This portal can't take you there."
@@ -130,14 +130,14 @@ portal:
 keeploaded:
   list-header: "<#F3E5AB>Keep-loaded regions:</#F3E5AB> <count> · <#F3E5AB>active chunk tickets:</#F3E5AB> <tickets>"
   list-entry: "<#F3E5AB><region></#F3E5AB> in <#F3E5AB><world></#F3E5AB>: <chunks> chunks, <#F3E5AB>chunk X/Z</#F3E5AB> <minx>,<minz> → <maxx>,<maxz>"
-  too-large: "That selection covers <chunks> chunks. The maximum is <max>."
-  saved: "Keep-loaded region <#F3E5AB><region></#F3E5AB> saved in <#F3E5AB><world></#F3E5AB> (<chunks> chunks)."
-  deleted: "Keep-loaded region <#F3E5AB><region></#F3E5AB> deleted."
-  not-found: "There is no keep-loaded region named <#F3E5AB><region></#F3E5AB>."
+  too-large: "Oops! That selection covers <chunks> chunks. The maximum is <max>."
+  saved: "All set! Keep-loaded region <#F3E5AB><region></#F3E5AB> saved in <#F3E5AB><world></#F3E5AB> (<chunks> chunks)."
+  deleted: "All set! Keep-loaded region <#F3E5AB><region></#F3E5AB> deleted."
+  not-found: "Oops! There is no keep-loaded region named <#F3E5AB><region></#F3E5AB>."
 reload:
-  done: "<#F3E5AB>Atlas</#F3E5AB> reloaded its messages, worlds, portals and keep-loaded regions."
+  done: "All set! <#F3E5AB>Atlas</#F3E5AB> reloaded its messages, worlds, portals and keep-loaded regions."
   failed: "<#F3E5AB>Atlas</#F3E5AB> could not reload. The previous state stays active."
 items:
   selector:
     name: "<white>Atlas Selector</white>"
-    lore: "<white><font:atlas:lore></font></white> <#A8D5A2>Left-click:</#A8D5A2> <white>corner 1</white>  <#A8D5A2>Right-click:</#A8D5A2> <white>corner 2</white>"
+    lore: "<white><font:atlas:lore></font></white> <#A8D5A2>Left-click: pick</#A8D5A2> <white>corner 1</white>  <#A8D5A2>Right-click: pick</#A8D5A2> <white>corner 2</white>"

@@ -145,13 +145,13 @@ class AtlasResourcesTest {
         }
         assertColor(catalog.get("items.selector.name"), "Atlas Selector", TextColor.color(0xFFFFFF));
         var lore = catalog.get("items.selector.lore");
-        for (String action : List.of("Left-click:", "Right-click:")) {
+        for (String action : List.of("Left-click: pick", "Right-click: pick")) {
             assertColor(lore, action, TextColor.color(0xA8D5A2));
         }
         for (String value : List.of("corner 1", "corner 2")) {
             assertColor(lore, value, TextColor.color(0xFFFFFF));
         }
-        assertEquals("\uE000 Left-click: corner 1  Right-click: corner 2",
+        assertEquals("\uE000 Left-click: pick corner 1  Right-click: pick corner 2",
                 PlainTextComponentSerializer.plainText().serialize(lore));
     }
 

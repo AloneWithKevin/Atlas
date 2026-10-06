@@ -1,5 +1,12 @@
 # Message and interface audit
 
+2026-10-06, 0.1.6 editorial review: 97 remaining entries reviewed under the owner's
+delegated editorial approval. 42 values polished; 55 retained. The seven existing
+exact approvals are unchanged. Chat, selector actions and lore keep their meaning,
+conditions, placeholders, palette, white glyph/font and two separating spaces.
+The empty portal-list wording stays precise instead of repeating the same fact.
+No new GUI, name, asset, metadata, permission or runtime behavior is introduced.
+
 2026-10-06, 0.1.5: owner approved exactly world.clone-queued, world.reset-queued
 and world.confirm-reset to explain separate preparation/activation starts.
 The 104-key catalog and placeholder/color contracts are unchanged. Bootstrap

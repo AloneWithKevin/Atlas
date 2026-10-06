@@ -1,5 +1,24 @@
 # Verification
 
+## 2026-10-06, Atlas 0.1.6 editorial package
+
+The 97 remaining catalog entries were reviewed: 42 values polished and 55 retained;
+the seven previously approved values remain unchanged. All 104 keys and placeholder
+contracts are unchanged, as are palette/font/glyph, units, conditions and controls.
+The diagnostic/formatter centralization proposals are outside this release.
+
+Java 25 message-package tests and runtime/API build pass **10 tests, 0 failures,
+0 errors, 0 skipped**, using actual Campfire and Closet rendering/registration.
+The initial test run caught the previous exact lore assertion; the fixture was
+updated to check both complete new action spans in green, corner values in white,
+the same glyph/font and two separating spaces. The rerun passes.
+
+All runtime class bytes and the public API remain identical to the verified 0.1.5
+release. No new gameplay/database test run is claimed: the 0.1.5 full suite of 64
+passing cases, including 19 isolated DB cases, covers that unchanged implementation.
+Descriptor/config/content contracts remain unchanged apart from the version.
+Packaged credentials are empty; no assets or provider runtime are embedded.
+
 ## 2026-10-06, Atlas 0.1.5 world preparation/recovery
 
 Java 25 clean test shadowJar apiJar offline build passes **64 tests, 0 failures,

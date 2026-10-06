@@ -1,5 +1,12 @@
 # Atlas final report
 
+Atlas 0.1.6 (2026-10-06) reviews the remaining 97 catalog entries and gives 42
+values warmer English, including arrival and permission messages and selector
+lore. Existing exact approvals, all 104 keys, placeholders, palette, glyph, units,
+conditions and gameplay are preserved. Precise help, information, console text,
+destructive confirmations and tool identity remain clear. This is an editorial
+release; new diagnostic/formatter centralization contracts remain separate.
+
 Atlas 0.1.5 (2026-10-06) adds atomic lifecycle queue/cancellation and bounded,
 checksum-verified clone/reset preparation. Proven publication resumes after an
 interruption; uncertain trees stay disabled and original reset data is retained.
