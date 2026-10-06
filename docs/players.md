@@ -22,6 +22,16 @@ server (Europe or North America). Walk into the portal to travel. You do not nee
 - A portal to the other server moves you there through the network. Your trip finishes when you
   arrive; if it does not, you stay where you joined and can simply try again.
 
+Portal messages tell you what happened:
+
+- **"Off we go! Travelling to ..."** means the portal is sending you to the other server.
+- **"Oops! ... isn't loaded right now. This portal can't take you there."** means the
+  destination world is unavailable. Contact staff if you need help reaching it.
+- **"Whoops, the portal hiccupped! Give it another try."** means the portal could not
+  send you. Try again, and contact staff if it keeps happening.
+- **"Your portal trip hit a bump! You're staying right where you joined."** means the
+  trip could not be completed on arrival. You remain at your joining position.
+
 ## World rules
 
 Each world decides things such as:

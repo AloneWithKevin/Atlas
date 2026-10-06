@@ -123,10 +123,10 @@ portal:
   invalid-region: "Cross-server portals can only lead to the other region."
   target-set: "Portal <#F3E5AB><portal></#F3E5AB> now leads to <#F3E5AB><target></#F3E5AB>."
   # <region>: EU or NA
-  switching: "Travelling to <#F3E5AB><region></#F3E5AB>…"
-  target-missing: "This portal leads to <#F3E5AB><world></#F3E5AB>, which is not loaded right now."
-  failed: "The portal could not send you. Please <#A8D5A2>try again</#A8D5A2>."
-  arrival-failed: "Your portal trip could not be completed. You stay where you joined."
+  switching: "Off we go! Travelling to <#F3E5AB><region></#F3E5AB>…"
+  target-missing: "Oops! <#F3E5AB><world></#F3E5AB> isn't loaded right now. This portal can't take you there."
+  failed: "Whoops, the portal hiccupped! <#A8D5A2>Give it another try</#A8D5A2>."
+  arrival-failed: "Your portal trip hit a bump! You're staying right where you joined."
 keeploaded:
   list-header: "<#F3E5AB>Keep-loaded regions:</#F3E5AB> <count> · <#F3E5AB>active chunk tickets:</#F3E5AB> <tickets>"
   list-entry: "<#F3E5AB><region></#F3E5AB> in <#F3E5AB><world></#F3E5AB>: <chunks> chunks, <#F3E5AB>chunk X/Z</#F3E5AB> <minx>,<minz> → <maxx>,<maxz>"

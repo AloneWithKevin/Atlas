@@ -1,5 +1,29 @@
 # Verification
 
+## 2026-10-06, Atlas 0.1.4 portal wording
+
+The four ordinary player portal messages now use friendlier English. No keys,
+placeholders, colors, permissions or gameplay behavior changed. The content README
+was moved to `docs/content.md`: documentation under `content/` failed Closet's
+pack-path validation. The two external assets are unchanged.
+
+Java 25 `test --tests nl.pixelretreat.atlas.message.AtlasResourcesTest shadowJar apiJar
+--offline` passed: **6 tests, 0 failures, 0 errors, 0 skipped**, using real Campfire
+catalog/rendering and Closet registration/pack validation. This targeted rerun
+does not replace the earlier full gameplay/database verification or owner game checks.
+The initial registration failure was reproduced and resolved by moving documentation
+outside the asset root.
+
+Artifact comparison confirms exactly four changed catalog values, all 54 Atlas
+gameplay/API classes byte-identical to 0.1.3, unchanged API JAR, and unchanged
+descriptor/config apart from version. Packaged credentials are empty; no assets
+or provider runtime are embedded. No deployment, pack publication or server action.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `Atlas-0.1.4.jar` | `8A73B3B4308115A3179964D00FA73298F2075F9721164E5CDB60A69CB51D8151` |
+| `Atlas-0.1.4-api.jar` | `B4B923A1159786DF97631520385B71702F635BC021671B205AE8580AF05B0085` |
+
 ## 2026-10-05, Atlas 0.1.3 selector mini-glyph
 
 Full Java 25 `clean test shadowJar apiJar --offline --continue` build passed:
