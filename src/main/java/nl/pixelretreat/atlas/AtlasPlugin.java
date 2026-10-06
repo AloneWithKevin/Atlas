@@ -239,7 +239,7 @@ public final class AtlasPlugin extends JavaPlugin {
             reportStartup(messages);
             SelectionService selections = new SelectionService();
             TeleportService teleports = new TeleportService(this, rules, settings);
-            PortalService portals = new PortalService(this, repository, workers, settings, teleports);
+            PortalService portals = new PortalService(this, repository, workers, settings, teleports, messages);
             KeepLoadedService regions = new KeepLoadedService(this, repository, workers);
             keepLoaded = regions;
             WorldAdminService worlds = new WorldAdminService(repository, workers, rules, datapack(settings),
@@ -297,7 +297,7 @@ public final class AtlasPlugin extends JavaPlugin {
             if (outcome.success()) getLogger().info(messages.plain("startup.operation-done", values));
             else {
                 Map<String, String> withDetail = new java.util.HashMap<>(values);
-                withDetail.put("detail", outcome.detail());
+                withDetail.put("detail", messages.operationDetail(outcome.detail()));
                 getLogger().warning(messages.plain("startup.operation-failed", withDetail));
             }
         }

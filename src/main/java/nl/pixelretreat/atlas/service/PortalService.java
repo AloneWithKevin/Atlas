@@ -20,6 +20,7 @@ import nl.pixelretreat.atlas.portal.PortalIndex;
 import nl.pixelretreat.atlas.portal.PortalTarget;
 import nl.pixelretreat.atlas.portal.TravelTicket;
 import nl.pixelretreat.atlas.storage.AtlasRepository;
+import nl.pixelretreat.atlas.message.AtlasMessages;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -46,16 +47,18 @@ public final class PortalService {
     private final AtlasWorkers workers;
     private final AtlasConfig config;
     private final TeleportService teleports;
+    private final AtlasMessages messages;
     private final AtomicReference<PortalIndex> index = new AtomicReference<>(PortalIndex.EMPTY);
     private final Map<UUID, Long> cooldowns = new ConcurrentHashMap<>();
 
     public PortalService(Plugin plugin, AtlasRepository repository, AtlasWorkers workers, AtlasConfig config,
-                         TeleportService teleports) {
+                         TeleportService teleports, AtlasMessages messages) {
         this.plugin = plugin;
         this.repository = repository;
         this.workers = workers;
         this.config = config;
         this.teleports = teleports;
+        this.messages = messages;
     }
 
     /** The current portal index. */
@@ -199,7 +202,7 @@ public final class PortalService {
 
     private void withdraw(TravelTicket ticket) {
         workers.submit(() -> repository.withdrawTicket(ticket.id())).exceptionally(failure -> {
-            plugin.getLogger().warning("Atlas could not withdraw an unused travel ticket");
+            messages.warn("diagnostic.travel-ticket-withdraw");
             return false;
         });
     }

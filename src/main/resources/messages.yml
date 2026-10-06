@@ -141,3 +141,14 @@ items:
   selector:
     name: "<white>Atlas Selector</white>"
     lore: "<white><font:atlas:lore></font></white> <#A8D5A2>Left-click: pick</#A8D5A2> <white>corner 1</white>  <#A8D5A2>Right-click: pick</#A8D5A2> <white>corner 2</white>"
+diagnostic:
+  travel-ticket-read: "Atlas could not read a travel ticket."
+  travel-ticket-withdraw: "Atlas could not withdraw an unused travel ticket."
+operation:
+  delete-reenabled: "World is enabled again."
+destination:
+  local-spawn: "<world> spawn"
+  local-location: "<world> <x>,<y>,<z>"
+  remote-spawn: "<region>:<world> spawn"
+  remote-location: "<region>:<world> <x>,<y>,<z>"
+  bounds: "<minx>,<miny>,<minz> -> <maxx>,<maxy>,<maxz>"

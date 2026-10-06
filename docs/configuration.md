@@ -1,5 +1,16 @@
 # Configuration
 
+## Message catalog
+
+Atlas 0.1.7 declares 112 required message keys: the existing 104 plus eight
+diagnostic/operation/destination templates. The travel-ticket warnings and delete
+re-enabled reason now use the catalog, as do local/remote spawn/location and portal
+bounds descriptions. Destination placeholders are plain input; enclosing messages
+retain their existing colors. Coordinate display still truncates to integers.
+Messages can be overridden and reloaded through the existing Campfire reload.
+Do not remove required keys. The release installer adds missing bundled keys while
+preserving existing overrides; database credentials remain in config.yml only.
+
 `plugins/Atlas/config.yml` is read once at startup; every key is required and an invalid value
 stops Atlas. Keep it identical on EU and NA apart from `server.region` and the credentials. The
 distributed file has an empty username and password; fill them in on the server only.

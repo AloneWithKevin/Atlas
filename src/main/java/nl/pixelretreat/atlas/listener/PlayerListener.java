@@ -40,7 +40,7 @@ public final class PlayerListener implements Listener {
     public void arrived(Player player) {
         portals.arrive(player).whenComplete((travel, failure) -> {
             if (failure != null) {
-                plugin.getLogger().warning("Atlas could not read a travel ticket");
+                messages.warn("diagnostic.travel-ticket-read");
                 messages.send(player, "portal.arrival-failed");
                 return;
             }

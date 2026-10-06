@@ -1,5 +1,19 @@
 # Verification
 
+## 2026-10-06, Atlas 0.1.7 catalog bindings
+
+Full Java 25 clean test shadowJar apiJar offline build passes **69 tests, 0 failures,
+0 errors, 0 skipped**, including **20 private MariaDB cases** and actual Campfire/
+Closet rendering and content registration. All 112 catalog keys are validated.
+
+New cases exercise all four target descriptions, negative fractional coordinates,
+bounds, every new configurable template, literal markup input, authored console
+warnings, unchanged failed-arrival delivery and a re-enabled deletion preserving
+its files/state while reporting the keyed diagnostic. Arbitrary detail codes are
+not treated as message keys. No exception details enter those console warnings.
+Existing world-copy interruption/rollback/bounded-worker coverage also passes.
+No installed database was written or server restarted for verification.
+
 ## 2026-10-06, Atlas 0.1.6 editorial package
 
 The 97 remaining catalog entries were reviewed: 42 values polished and 55 retained;

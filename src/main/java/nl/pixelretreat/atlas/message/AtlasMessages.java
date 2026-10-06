@@ -1,6 +1,7 @@
 package nl.pixelretreat.atlas.message;
 
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -15,6 +16,8 @@ import nl.pixelretreat.campfire.api.MessageCatalog;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
+import nl.pixelretreat.atlas.portal.Portal;
+import nl.pixelretreat.atlas.portal.PortalTarget;
 
 /**
  * Atlas' Campfire message contract and delivery. Every key and its placeholders are listed here,
@@ -27,6 +30,14 @@ public final class AtlasMessages {
 
     /** Every message key with its exact placeholder names. */
     public static final Map<String, Set<String>> CONTRACT = Map.ofEntries(
+            Map.entry("diagnostic.travel-ticket-read", Set.of()),
+            Map.entry("diagnostic.travel-ticket-withdraw", Set.of()),
+            Map.entry("operation.delete-reenabled", Set.of()),
+            Map.entry("destination.local-spawn", WORLD),
+            Map.entry("destination.local-location", Set.of("world", "x", "y", "z")),
+            Map.entry("destination.remote-spawn", Set.of("region", "world")),
+            Map.entry("destination.remote-location", Set.of("region", "world", "x", "y", "z")),
+            Map.entry("destination.bounds", Set.of("minx", "miny", "minz", "maxx", "maxy", "maxz")),
             Map.entry("startup.ready", Set.of()), Map.entry("startup.failed", Set.of()),
             Map.entry("startup.operation-done", Set.of("id", "kind", "world")),
             Map.entry("startup.operation-failed", Set.of("id", "kind", "world", "detail")),
@@ -154,5 +165,38 @@ public final class AtlasMessages {
     /** A message with placeholders as plain text for the console. */
     public String plain(String key, Map<String, String> values) {
         return PlainTextComponentSerializer.plainText().serialize(catalog.get(key, values));
+    }
+
+    /** Console diagnostics never include an exception message or connection details. */
+    public void warn(String key) { owner.getLogger().warning(plain(key)); }
+
+    /** Only this known diagnostic key is translated; other details remain technical values. */
+    public String operationDetail(String detail) {
+        return "operation.delete-reenabled".equals(detail) ? plain("operation.delete-reenabled") : detail;
+    }
+
+    /** Nested descriptions are plain text; the enclosing message keeps its target color. */
+    public String destination(PortalTarget target) {
+        Map<String, String> values = new HashMap<>();
+        values.put("world", nl.pixelretreat.atlas.world.WorldNames.shortName(target.world()));
+        boolean remote = target.kind() == PortalTarget.Kind.SERVER;
+        if (remote) values.put("region", target.region().orElse("?"));
+        target.point().ifPresent(point -> {
+            values.put("x", Integer.toString((int) point.x()));
+            values.put("y", Integer.toString((int) point.y()));
+            values.put("z", Integer.toString((int) point.z()));
+        });
+        if (remote) return plain(target.point().isPresent()
+                ? "destination.remote-location" : "destination.remote-spawn", values);
+        return plain(target.point().isPresent()
+                ? "destination.local-location" : "destination.local-spawn", values);
+    }
+
+    /** Existing integer bounds and direction are retained exactly. */
+    public String bounds(Portal portal) {
+        return plain("destination.bounds", Map.of(
+                "minx", Integer.toString(portal.minX()), "miny", Integer.toString(portal.minY()),
+                "minz", Integer.toString(portal.minZ()), "maxx", Integer.toString(portal.maxX()),
+                "maxy", Integer.toString(portal.maxY()), "maxz", Integer.toString(portal.maxZ())));
     }
 }

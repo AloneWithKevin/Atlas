@@ -368,7 +368,7 @@ public final class AtlasCommand implements TabExecutor {
             if (s.portals().index().all().isEmpty()) { messages.send(sender, "portal.list-empty"); return; }
             s.portals().index().all().stream().sorted((a, b) -> a.name().compareTo(b.name())).forEach(portal ->
                     messages.send(sender, "portal.list-entry", Map.of("portal", portal.name(),
-                            "world", WorldNames.shortName(portal.world()), "target", describe(portal.target()))));
+                            "world", WorldNames.shortName(portal.world()), "target", messages.destination(portal.target()))));
             return;
         }
         if (args.length < 2 || !PORTAL.contains(action)) { messages.send(sender, "usage.portal"); return; }
@@ -397,9 +397,8 @@ public final class AtlasCommand implements TabExecutor {
                 if (found.isEmpty()) { messages.send(sender, "portal.not-found", named); return; }
                 Portal portal = found.get();
                 messages.send(sender, "portal.info", Map.of("portal", name, "world", WorldNames.shortName(portal.world()),
-                        "bounds", portal.minX() + "," + portal.minY() + "," + portal.minZ() + " -> "
-                                + portal.maxX() + "," + portal.maxY() + "," + portal.maxZ(),
-                        "target", describe(portal.target()), "cooldown", Integer.toString(portal.cooldownMillis()),
+                        "bounds", messages.bounds(portal),
+                        "target", messages.destination(portal.target()), "cooldown", Integer.toString(portal.cooldownMillis()),
                         "sound", portal.sound().orElse("-"), "particle", portal.particle().orElse("-"),
                         "restricted", Boolean.toString(portal.restricted()), "fill", portal.fillBlock().orElse("-")));
             }
@@ -509,7 +508,7 @@ public final class AtlasCommand implements TabExecutor {
         }
         PortalTarget chosen = target;
         update(sender, s, name, portal -> portal.withTarget(chosen), "portal.target-set",
-                Map.of("portal", name, "target", describe(chosen)));
+                Map.of("portal", name, "target", messages.destination(chosen)));
     }
 
     private void update(CommandSender sender, Services s, String name, java.util.function.UnaryOperator<Portal> change,
@@ -521,14 +520,6 @@ public final class AtlasCommand implements TabExecutor {
         });
     }
 
-    private static String describe(PortalTarget target) {
-        String world = WorldNames.shortName(target.world());
-        String point = target.point().map(p -> " " + (int) p.x() + "," + (int) p.y() + "," + (int) p.z()).orElse(" spawn");
-        return switch (target.kind()) {
-            case SPAWN, LOCATION -> world + point;
-            case SERVER -> target.region().orElse("?") + ":" + world + point;
-        };
-    }
 
     private void keepLoaded(CommandSender sender, Services s, String[] args) {
         String action = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
