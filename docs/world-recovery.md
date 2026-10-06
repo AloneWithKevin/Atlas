@@ -40,6 +40,10 @@ tables and folders. Normal enable/reset/delete commands block unresolved copy
 targets. Cancellation is allowed only before preparation claims a queued copy;
 it atomically restores the reset's prior enabled state or removes a clone declaration.
 
+Since 0.1.7, the refused deletion of a re-enabled world stores the stable
+operation.delete-reenabled meaning and resolves its catalog text when reporting.
+Existing receipts are not migrated; operation state and refusal behavior are unchanged.
+
 ## Threads and durability limits
 
 Traversal streams entries. At most workers.threads file futures are outstanding;

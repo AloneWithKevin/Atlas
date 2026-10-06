@@ -1,5 +1,13 @@
 # Atlas final report
 
+Atlas 0.1.7 (2026-10-06) binds the remaining eight fixed console/target templates
+to messages.yml. The catalog now contains 112 required keys. Configured overrides
+drive all four destination formats, bounds and warnings; exceptions and credentials
+are not appended to diagnostics. Delete refusal records a stable message-key
+meaning, rendered when reported; historical receipts are untouched. Lifecycle,
+travel, permissions, coordinates, assets and player actions are unchanged.
+Full verification passes 69 tests, including 20 isolated database cases.
+
 Atlas 0.1.6 (2026-10-06) reviews the remaining 97 catalog entries and gives 42
 values warmer English, including arrival and permission messages and selector
 lore. Existing exact approvals, all 104 keys, placeholders, palette, glyph, units,

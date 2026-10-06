@@ -187,6 +187,20 @@ final class WorldCopyRecoveryMariaDbTest {
         }
     }
 
+    @Test void reenabledDeletionKeepsFilesAndReportsStableCatalogMeaning() throws Exception {
+        try (Fixture f = new Fixture(true)) {
+            f.repository.cancel(f.operation.id());
+            f.repository.disableAndQueueDelete("atlas:target", UUID.randomUUID());
+            f.repository.setEnabled("atlas:target", true);
+            var result = new StartupOperations(f.repository, f.folders).run().getFirst();
+            assertFalse(result.success());
+            assertEquals("operation.delete-reenabled", result.detail());
+            assertTrue(f.repository.pending().isEmpty());
+            assertTrue(f.repository.loadWorlds().get("atlas:target").enabled());
+            assertEquals("original", Files.readString(f.target.resolve("region/chunk")));
+        }
+    }
+
     final class Fixture implements AutoCloseable {
         final HikariDataSource pool;
         final String server = "R" + UUID.randomUUID().toString().substring(0, 6);

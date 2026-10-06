@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 /** Every message key written in the code exists in the contract, so no player sees a missing key. */
 class MessageKeyUsageTest {
     private static final Pattern KEY = Pattern.compile(
-            "\"((?:common|help|usage|world|info|teleport|spawn|flag|setting|selector|selection|portal|keeploaded|reload|startup|delivery)"
+            "\"((?:common|help|usage|world|info|teleport|spawn|flag|setting|selector|selection|portal|keeploaded|reload|startup|delivery|diagnostic|operation|destination)"
                     + "\\.[a-z.-]+)\"");
 
     @Test void literalKeysInTheSourcesAreInTheContract() throws Exception {

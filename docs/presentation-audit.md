@@ -1,5 +1,13 @@
 # Message and interface audit
 
+2026-10-06, 0.1.7: eight additional fixed templates are catalog-bound: two
+travel-ticket console warnings, the delete-re-enabled diagnostic and five destination
+descriptions (local/remote spawn/location and bounds). All 112 catalog keys are
+validated. Destination strings remain plain nested values with existing outer color
+scope; negative decimal coordinates retain Java integer truncation. Runtime phase,
+receipt and rule identifiers remain technical data; Bukkit metadata is separate.
+The generic bootstrap policy and earlier exact/editorial text approvals are retained.
+
 2026-10-06, 0.1.6 editorial review: 97 remaining entries reviewed under the owner's
 delegated editorial approval. 42 values polished; 55 retained. The seven existing
 exact approvals are unchanged. Chat, selector actions and lore keep their meaning,

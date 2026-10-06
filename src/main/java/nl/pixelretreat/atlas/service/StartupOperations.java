@@ -80,7 +80,7 @@ public final class StartupOperations {
         WorldRecord target = worlds.get(operation.world());
         return switch (operation.kind()) {
             case DELETE -> {
-                if (target != null && target.enabled()) yield new Outcome(operation, false, "world is enabled again");
+                if (target != null && target.enabled()) yield new Outcome(operation, false, "operation.delete-reenabled");
                 folders.delete(operation.world());
                 repository.deleteWorld(operation.world());
                 yield new Outcome(operation, true, "deleted");
