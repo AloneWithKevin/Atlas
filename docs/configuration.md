@@ -34,7 +34,7 @@ Atlas 0.1.3 prefixes the existing selector action line with the registered
 font/bitmap must be installed in the Atlas data folder independently of the JAR.
 Registration supplies them to Closet's required pack input. Keep the matching glyph
 prefix, manifest and external content together; a matching client pack release is
-required for rendering. See [external content](../content/README.md).
+required for rendering. See [external content](content.md).
 
 ## Flags
 

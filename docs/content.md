@@ -17,9 +17,12 @@ The text after it, including the two-space separator, remains unchanged. Closet'
 validated asynchronous owner registration automatically contributes both assets to
 the pack inputs and lists the glyph in its catalog.
 
-For a separately authorized release, install this directory's `assets/` tree beneath
+For a separately authorized release, install the repository's `content/assets/` tree beneath
 the Atlas data folder's `content/`, alongside the matching manifest and message catalog.
 Assets are not extracted from the JAR and are never copied into code build output.
 Missing content fails registration. The matching Closet pack must be built and
 published through its approved release process before client rendering can be accepted.
 That installation/publication was not performed by this source task.
+
+Keep documentation outside `content/`: Closet validates every file under that
+asset root as a pack input.

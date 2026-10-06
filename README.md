@@ -21,4 +21,4 @@ Documentation: [commands](docs/commands.md), [permissions](docs/permissions.md),
 [build proposal](docs/build-proposal.md), [message and interface audit](docs/presentation-audit.md).
 
 Selector lore contributes an external mini-glyph through Closet. Its font/texture
-remain outside the JAR: [external content](content/README.md).
+remain outside the JAR: [external content](docs/content.md).

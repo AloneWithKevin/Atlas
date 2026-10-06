@@ -85,7 +85,7 @@ existing asynchronous Closet startup stage. Both font JSON and texture automatic
 enter Closet's required pack inputs and catalog; no central provider file or font slot
 is changed. Missing content fails registration before dependent Atlas actions enable.
 The authoring assets remain outside compilation output and the JAR. See
-[external content](../content/README.md) for the separate installation contract.
+[external content](content.md) for the separate installation contract.
 
 All 41 tests pass, including actual Closet registry/catalog/pack-input publication,
 real Campfire rendering, bitmap dimensions/transparency/font reference checks and

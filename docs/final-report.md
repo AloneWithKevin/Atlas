@@ -1,5 +1,7 @@
 # Atlas final report
 
+Atlas 0.1.4 (2026-10-06) makes the four ordinary player portal messages friendlier
+and moves content documentation outside Closet's validated asset root.
 Atlas 0.1.3 (2026-10-05) adds a registered selector mini-glyph to the 0.1.2 message-palette
 corrections and the verified 0.1.1 trading patch
 on Atlas 0.1.0 (2026-10-01). Atlas is the
@@ -64,6 +66,10 @@ the reflective `worldService()` have no successor. The proposal's `[seed]` argum
 
 ## Verification
 
+- **Atlas 0.1.4** (2026-10-06): six resource tests passed, zero failures/errors/skips,
+  including real Campfire/Closet validation after moving the content README.
+  Exactly four catalog values changed; placeholders, colors, permissions,
+  gameplay/API bytecode and API-JAR hash remain unchanged. See `verification.md`.
 - **Atlas 0.1.0** (2026-10-01): 26 tests, 26 passed, 0 skipped, including the real-MariaDB
   repository test; recorded in `verification.md`. The in-game test is still pending.
 - **Atlas 0.1.1** (2026-10-05): new and extended tests cover the trading flag key/default, per-world
