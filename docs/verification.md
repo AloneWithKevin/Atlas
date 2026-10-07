@@ -1,5 +1,22 @@
 # Verification
 
+## 2026-10-07, selector delivery integration
+
+Java 25 `assemble apiJar --offline` succeeds against the actual current Campfire,
+Closet delivery and Veyra item-exchange API artifacts. The initial compile found
+that the ordinary Closet API JAR did not contain the new delivery types; the pin
+was corrected to the published complete `closet-api-delivery.jar`. No new tests
+or repeated suites were run. Existing regression results below are historical
+baseline evidence, not verification of the new caller journal.
+
+Source review traces durable original-ID reservation, same-ID reconciliation,
+receipt identity/accounting checks, conditional completion, pending/offline
+retention and join recovery without new requests. Runtime is `Atlas.jar`.
+API, flags, permission distribution, world-copy recovery and all existing approved
+message values are unchanged. One new required key is `selector.overflow`.
+Actual inventory-full delivery, interruption/rejoin, mailbox collection and
+prepared-world activation remain bundled in-game acceptance checks.
+
 ## 2026-10-06, Atlas 0.1.8 region/worker lifecycle
 
 Java 25 targeted test/runtime/API build passes **6 tests, zero failures/errors/skips**:

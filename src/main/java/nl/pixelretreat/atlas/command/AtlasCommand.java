@@ -62,7 +62,7 @@ public final class AtlasCommand implements TabExecutor {
     /** Collaborators of the command; it is registered only once all of them are ready. */
     public record Services(AtlasConfig config, RulesService rules, WorldAdminService worlds,
                            TeleportService teleports, PortalService portals, KeepLoadedService keepLoaded,
-                           SelectionService selections, Function<Player, CompletableFuture<Boolean>> giveSelector,
+                           SelectionService selections, Function<Player, CompletableFuture<nl.pixelretreat.atlas.service.SelectorDeliveryService.Result>> giveSelector,
                            Supplier<CompletableFuture<Void>> reload) { }
 
     private final Plugin plugin;
@@ -348,8 +348,14 @@ public final class AtlasCommand implements TabExecutor {
 
     private void selector(CommandSender sender, Services s) {
         if (!(sender instanceof Player player)) { messages.send(sender, "common.players-only"); return; }
-        s.giveSelector().apply(player).whenComplete((given, failure) ->
-                messages.send(sender, failure == null && Boolean.TRUE.equals(given) ? "selector.given" : "selector.pending"));
+        s.giveSelector().apply(player).whenComplete((given, failure) -> {
+            String key = failure != null || given == null ? "selector.pending" : switch (given) {
+                case GIVEN -> "selector.given";
+                case OVERFLOW -> "selector.overflow";
+                case PENDING, NONE -> "selector.pending";
+            };
+            messages.send(sender, key);
+        });
     }
 
     private Optional<SelectionService.Bounds> selection(CommandSender sender, Services s) {

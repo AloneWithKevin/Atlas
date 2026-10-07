@@ -1,5 +1,10 @@
 # Worlds and portals
 
+Atlas has no item rewards or public item-give commands. If an item delivery tells
+you it is waiting in overflow, make room in your inventory and use `/overflow` to
+collect it. If a delivery is still pending, follow its message and contact staff
+if it does not resolve; do not assume another copy is needed.
+
 Pixel Retreat has more than one world on each server: the normal overworld, the Nether, the End,
 and extra worlds such as event areas. Each world can have its own rules, so what you can do
 depends on where you are.

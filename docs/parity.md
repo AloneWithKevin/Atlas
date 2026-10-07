@@ -55,44 +55,31 @@ for in [the presentation audit](presentation-audit.md); approved text and behavi
 
 ## Selector delivery and overflow integration
 
-The 2026-10-07 audit covers all Atlas physical issuance paths. The only path is
-the staff command `/atlas selector`: `AtlasPlugin.giveSelector` submits one
-`atlas:selector` through `ClosetGrants`, with action `atlas.selector` and one
-operation UUID per invocation. Atlas asynchronously registers its manifest with
-Closet before enabling the command. Closet owns the item factory, preparation,
-serialization and grant; Atlas owns access checks and corner-selection behavior.
-There are no Atlas item rewards, refunds, returns or public physical-grant adapters.
-World drop restrictions guard normal gameplay and are not item issuance.
+The only physical issuance is staff `/atlas selector`, action `atlas.selector`,
+one registered `atlas:selector`. Atlas registers its manifest asynchronously;
+Closet owns factory/preparation/serialization and final delivery. Atlas owns
+permissions, corner selection and item usage. There are no Atlas rewards,
+refunds, returns, menu icons or public physical-grant adapters. World drop flags
+are normal gameplay guards, not issuance.
 
-The delivered Atlas 0.1.8 and Closet 0.1.5 currently use an all-or-nothing grant.
-Closet plans storage-slot stacking/empty-slot placement, but refuses the entire
-request with `NOT_APPLIED` / `CAPACITY_EXCEEDED` when any amount does not fit.
-For this one unstackable selector, the exact undelivered amount is one. It is not
-stored in Market overflow. Atlas reports `selector.pending` for every non-APPLIED
-outcome and does not retain the UUID or query `ClosetGrants.outcome`. The current
-invocation does not automatically retry; an unresolved invocation must not be
-replaced by a fresh grant ID as a recovery mechanism.
+The 2026-10-07 integration replaces legacy all-or-nothing ClosetGrants with
+ClosetDeliveries.issue/reconcile and FreshDeliveryRequest(INVENTORY_FIRST).
+Closet freezes the first exact payload, proves the inventory/rest partition and
+stores only confirmed capacity remainder in Market. Atlas's shared
+atlas_selector_delivery caller journal preserves the original UUID across nodes,
+restarts, repeated commands, offline delivery and UNKNOWN/lost replies. Only a
+matching COMPLETE receipt with expectedUnits=1 settles the pointer; late completion
+cannot settle a newer ID. Pending join/startup recovery never reserves a new request.
+Confirmed mailbox delivery uses selector.overflow; pending text stays approved.
 
-The required provider/consumer release is tracked in the workspace
-`PLUGIN_INTEGRATIONS.md` and the central item-issuance audit. Closet leads the
-shared fresh-item and exact-existing-stack grant/overflow contract; Market owns
-overflow storage, and Controller retains its approved transfer/payment/reward
-coordination. Atlas gameplay does not move into Closet.
+Provider-owned frozen goods are never rematerialized from later templates. Atlas
+currently has no existing-stack redelivery path. Market owns overflow storage;
+Controller retains its transfer/payment/reward coordination. Shared release
+tracking remains in workspace PLUGIN_INTEGRATIONS.md. Compilation uses the public
+Closet delivery API, current Campfire and Veyra item-exchange artifacts; technical
+hashes and rollout dependencies are in [the release handoff](master-handoff-20261007.md).
 
-Atlas's consumer update is pending a verified public contract that preserves the
-original operation ID, freezes exact item bytes/components, proves the inventory
-placement/rest partition, reports the durable overflow receipt and reconciles
-UNKNOWN/lost acknowledgements without new goods or IDs. Atlas must retain the
-original operation identity and handle delivery/pending outcomes distinctly through
-that contract. Exact existing or enriched stacks must use exact-byte redelivery,
-never reconstruction from a later item template. Atlas currently has no such
-existing-stack return path.
-
-Current Market source exposes `deliverStored`, but the audited installed
-Market 0.1.0 public artifact exposes only `deliver(ItemStack list)` and `receipt`.
-Matching Market and any required Veyra provider releases are not yet verified as
-delivered for this integration. New dependencies and consumer changes must be
-verified together against the released public artifacts before Atlas release.
-Until then, preserve existing pending outcomes and any retained operation IDs;
-do not add drops, fire-and-forget deposits, guessed compensation or private APIs.
-This documentation records pending work, not implemented overflow behavior.
+The source integration is complete. Runtime must have matching Closet delivery,
+Market and Veyra providers before game acceptance; compilation is not a claim
+that those server artifacts were installed. No direct drops, fire-and-forget
+fallbacks, compensating IDs, private APIs or legacy journal resets are introduced.
