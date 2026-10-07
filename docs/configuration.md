@@ -2,12 +2,14 @@
 
 ## Message catalog
 
-Atlas 0.1.7 declares 112 required message keys: the existing 104 plus eight
+Atlas declares 113 required message keys: the original 104 plus eight
 diagnostic/operation/destination templates. The travel-ticket warnings and delete
 re-enabled reason now use the catalog, as do local/remote spawn/location and portal
 bounds descriptions. Destination placeholders are plain input; enclosing messages
 retain their existing colors. Coordinate display still truncates to integers.
 Messages can be overridden and reloaded through the existing Campfire reload.
+The additional `selector.overflow` key reports confirmed Market storage and
+directs the recipient to `/overflow`. Existing approved messages are unchanged.
 Do not remove required keys. The release installer adds missing bundled keys while
 preserving existing overrides; database credentials remain in config.yml only.
 
@@ -20,7 +22,7 @@ missing key stops Atlas; there is no migration, fallback or guessed default.
 
 | Key | Meaning |
 | --- | --- |
-| `server.region` | `EU` or `NA`. Must equal Postbox's region; all Atlas rows are stored under it. |
+| `server.region` | `EU` or `NA`. Must equal Postbox's region; world rows are stored under it. Selector delivery intents follow the player across nodes. |
 | `server.proxy-names.EU`, `.NA` | Velocity server names used by cross-server portals. |
 | `database.host`, `port`, `name`, `username`, `password`, `ssl-mode` | Shared MariaDB connection (`pixelretreat_veyra`). `ssl-mode`: `disable`, `trust`, `verify-ca` or `verify-full`. |
 | `datapack.pack-format` | Data pack format of the running Minecraft version (121 for 26.3). |

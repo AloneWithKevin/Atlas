@@ -1,5 +1,11 @@
 # Message and interface audit
 
+2026-10-07: the selector delivery integration adds only `selector.overflow`,
+bringing the current catalog to 113 required keys. It highlights the item in
+yellow and `/overflow` in green, and is shown only after confirmed mailbox
+delivery. All earlier approved values, placeholders, glyphs and palette remain
+unchanged. Pending retains the existing message and original request identity.
+
 2026-10-06, 0.1.7: eight additional fixed templates are catalog-bound: two
 travel-ticket console warnings, the delete-re-enabled diagnostic and five destination
 descriptions (local/remote spawn/location and bounds). All 112 catalog keys are

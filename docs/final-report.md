@@ -1,5 +1,13 @@
 # Atlas final report
 
+The selector now uses Closet's shared inventory-first delivery contract. Exact
+confirmed capacity remainder goes to Market; pending/offline operations retain
+their original ID in the shared caller journal and resume after join/restart or
+a repeated command. Closet owns the frozen goods and durable receipts; Atlas
+retains selector behavior/access. Current dependency pins compile and assemble
+successfully. No new permissions, commands, configuration values or world
+behavior are added. Server rollout and actual game acceptance are separate.
+
 Atlas 0.1.8 (2026-10-06) settles queued worker results on shutdown, waits for
 region ticket reconciliation before reporting reload completion, discards older
 reads and prevents delayed callbacks from restoring released tickets. Six targeted

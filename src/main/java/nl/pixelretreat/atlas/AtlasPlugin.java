@@ -42,12 +42,10 @@ import nl.pixelretreat.atlas.world.WorldFolders;
 import nl.pixelretreat.campfire.api.CampfireDelivery;
 import nl.pixelretreat.campfire.api.CampfireMessages;
 import nl.pixelretreat.campfire.api.MessageCatalog;
-import nl.pixelretreat.closet.api.ClosetGrants;
+import nl.pixelretreat.closet.api.ClosetDeliveries;
 import nl.pixelretreat.closet.api.ClosetService;
 import nl.pixelretreat.closet.api.ContentRegistration;
-import nl.pixelretreat.closet.api.ItemGrantRequest;
-import nl.pixelretreat.closet.api.ItemGrantResult;
-import nl.pixelretreat.closet.api.ItemRequest;
+import nl.pixelretreat.atlas.service.SelectorDeliveryService;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.ServicePriority;
@@ -228,9 +226,9 @@ public final class AtlasPlugin extends JavaPlugin {
     private void install(AtlasConfig settings, RulesService rules, int attempt) {
         if (stopped.get() || !isEnabled()) return;
         CampfireDelivery delivery = getServer().getServicesManager().load(CampfireDelivery.class);
-        ClosetGrants grants = getServer().getServicesManager().load(ClosetGrants.class);
-        if (delivery == null || grants == null) {
-            if (attempt >= 30) { fail(new IllegalStateException("Campfire delivery or Closet grants unavailable")); return; }
+        ClosetDeliveries deliveries = getServer().getServicesManager().load(ClosetDeliveries.class);
+        if (delivery == null || deliveries == null || deliveries.apiVersion() < 1) {
+            if (attempt >= 30) { fail(new IllegalStateException("Campfire delivery or Closet deliveries unavailable")); return; }
             getServer().getGlobalRegionScheduler().runDelayed(this, task -> install(settings, rules, attempt + 1), 20L);
             return;
         }
@@ -238,6 +236,7 @@ public final class AtlasPlugin extends JavaPlugin {
             AtlasMessages messages = new AtlasMessages(this, Objects.requireNonNull(catalog), delivery);
             reportStartup(messages);
             SelectionService selections = new SelectionService();
+            SelectorDeliveryService selectors = new SelectorDeliveryService(this, repository, workers, deliveries);
             TeleportService teleports = new TeleportService(this, rules, settings);
             PortalService portals = new PortalService(this, repository, workers, settings, teleports, messages);
             KeepLoadedService regions = new KeepLoadedService(this, repository, workers);
@@ -250,13 +249,13 @@ public final class AtlasPlugin extends JavaPlugin {
                 getServer().getGlobalRegionScheduler().run(this, task -> {
                     if (stopped.get() || !isEnabled()) return;
                     getServer().getMessenger().registerOutgoingPluginChannel(this, "BungeeCord");
-                    PlayerListener players = new PlayerListener(this, rules, portals, selections, messages);
+                    PlayerListener players = new PlayerListener(this, rules, portals, selections, messages, selectors);
                     getServer().getPluginManager().registerEvents(players, this);
                     getServer().getPluginManager().registerEvents(new PortalListener(rules, portals, messages), this);
                     getServer().getPluginManager().registerEvents(new SelectorListener(closet, selections, messages), this);
                     getServer().getServicesManager().register(AtlasRules.class, rules, this, ServicePriority.Normal);
                     AtlasCommand command = new AtlasCommand(this, messages, new AtlasCommand.Services(settings, rules,
-                            worlds, teleports, portals, regions, selections, player -> giveSelector(grants, player),
+                            worlds, teleports, portals, regions, selections, player -> selectors.request(player.getUniqueId()),
                             () -> reloadAll(rules, portals, regions)));
                     Objects.requireNonNull(getCommand("atlas")).setExecutor(command);
                     Objects.requireNonNull(getCommand("atlas")).setTabCompleter(command);
@@ -273,13 +272,6 @@ public final class AtlasPlugin extends JavaPlugin {
         } catch (RuntimeException failure) {
             fail(failure);
         }
-    }
-
-    private CompletableFuture<Boolean> giveSelector(ClosetGrants grants, Player player) {
-        return grants.grant(this, new ItemGrantRequest(UUID.randomUUID(), player.getUniqueId(),
-                        Optional.of(player.getUniqueId()), "atlas.selector", ItemRequest.of(SelectorListener.SELECTOR, 1)))
-                .toCompletableFuture()
-                .thenApply(result -> result != null && result.status() == ItemGrantResult.Status.APPLIED);
     }
 
     private CompletableFuture<Void> reloadAll(RulesService rules, PortalService portals, KeepLoadedService regions) {

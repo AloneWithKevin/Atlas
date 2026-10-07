@@ -1,5 +1,21 @@
 # Architecture
 
+## Selector issuance
+
+`SelectorDeliveryService` persists the original operation ID in
+`atlas_selector_delivery`, keyed by player across nodes. Only explicit staff
+requests reserve new intents; startup/join recovery looks up pending intents.
+Concurrent local calls share the current future. MariaDB reservation retains the
+pending ID; only a verified COMPLETE Closet receipt marks that exact ID completed.
+The next explicit command can then reserve a new intent. Provider failures, unknown
+results and offline delivery retain the pointer; no replacement goods or IDs are
+created to compensate. Closet's durable journal owns the frozen payload, inventory
+partition, Market receipt and recovery. Atlas never materializes or drops the selector.
+All caller journal access runs on AtlasWorkers. Delivery callbacks only use immutable
+IDs/receipts; player messages use Campfire's public delivery service. A failed caller
+completion write does not invalidate proven delivery; the retained pointer safely
+reconciles the same COMPLETE provider receipt later.
+
 ## World lifecycle without createWorld
 
 Veyra rejects Bukkit `createWorld`/`unloadWorld` (Folia), and the owner decided on 2026-10-01 not

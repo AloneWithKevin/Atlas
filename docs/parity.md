@@ -52,3 +52,34 @@ for in [the presentation audit](presentation-audit.md); approved text and behavi
 - A world can only be cloned once its folder exists, so after it has been loaded once.
 - Cross-server portals need a Velocity route; VeyraTest01 currently has none.
 - Until Atlas has loaded its rules after a start, guarded gameplay and mob spawns are refused.
+
+## Selector delivery and overflow integration
+
+The only physical issuance is staff `/atlas selector`, action `atlas.selector`,
+one registered `atlas:selector`. Atlas registers its manifest asynchronously;
+Closet owns factory/preparation/serialization and final delivery. Atlas owns
+permissions, corner selection and item usage. There are no Atlas rewards,
+refunds, returns, menu icons or public physical-grant adapters. World drop flags
+are normal gameplay guards, not issuance.
+
+The 2026-10-07 integration replaces legacy all-or-nothing ClosetGrants with
+ClosetDeliveries.issue/reconcile and FreshDeliveryRequest(INVENTORY_FIRST).
+Closet freezes the first exact payload, proves the inventory/rest partition and
+stores only confirmed capacity remainder in Market. Atlas's shared
+atlas_selector_delivery caller journal preserves the original UUID across nodes,
+restarts, repeated commands, offline delivery and UNKNOWN/lost replies. Only a
+matching COMPLETE receipt with expectedUnits=1 settles the pointer; late completion
+cannot settle a newer ID. Pending join/startup recovery never reserves a new request.
+Confirmed mailbox delivery uses selector.overflow; pending text stays approved.
+
+Provider-owned frozen goods are never rematerialized from later templates. Atlas
+currently has no existing-stack redelivery path. Market owns overflow storage;
+Controller retains its transfer/payment/reward coordination. Shared release
+tracking remains in workspace PLUGIN_INTEGRATIONS.md. Compilation uses the public
+Closet delivery API, current Campfire and Veyra item-exchange artifacts; technical
+hashes and rollout dependencies are in [the release handoff](master-handoff-20261007.md).
+
+The source integration is complete. Runtime must have matching Closet delivery,
+Market and Veyra providers before game acceptance; compilation is not a claim
+that those server artifacts were installed. No direct drops, fire-and-forget
+fallbacks, compensating IDs, private APIs or legacy journal resets are introduced.

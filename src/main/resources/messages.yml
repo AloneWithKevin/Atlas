@@ -94,6 +94,7 @@ setting:
   invalid: "Oops! That is not a valid value for <#F3E5AB><setting></#F3E5AB>."
   set: "<#F3E5AB><setting></#F3E5AB> in <#F3E5AB><world></#F3E5AB> is now <value>."
 selector:
+  overflow: "Your <#F3E5AB>Atlas selector</#F3E5AB> is waiting in overflow! <#A8D5A2>Use /overflow</#A8D5A2> when you have room to pick it up."
   given: "Ready to map things out? <#F3E5AB>Atlas selector</#F3E5AB> delivered. <#A8D5A2>Left-click a block</#A8D5A2> for corner 1, <#A8D5A2>right-click</#A8D5A2> for corner 2."
   pending: "Your <#F3E5AB>Atlas selector</#F3E5AB> delivery is still unresolved. <#A8D5A2>Check your inventory</#A8D5A2> before trying again."
   first: "Nice! <#F3E5AB>Corner 1</#F3E5AB> set to <x>, <y>, <z> in <#F3E5AB><world></#F3E5AB>."

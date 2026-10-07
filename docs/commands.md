@@ -55,6 +55,11 @@ Trading is controlled per world with the same command, for example `/atlas flag 
 
 `/atlas selector` delivers the Atlas Selector (a Closet item). Left-click a block for corner 1,
 right-click a block for corner 2. It never breaks blocks. Selections are forgotten when you quit.
+Delivery tries inventory first; the exact confirmed capacity remainder goes to Market.
+When the selector is stored there, the message directs you to `/overflow`.
+An unresolved delivery retains its original request ID across restarts and nodes;
+repeating the selector command resumes that request. Joining also resumes an existing
+request without creating another one. A completed request permits a new selector request.
 
 | Command | What it does |
 | --- | --- |

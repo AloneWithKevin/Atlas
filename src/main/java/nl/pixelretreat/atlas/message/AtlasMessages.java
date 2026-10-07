@@ -78,6 +78,7 @@ public final class AtlasMessages {
             Map.entry("flag.unknown", Set.of("flags")), Map.entry("flag.set", Set.of("flag", "world", "value")),
             Map.entry("setting.invalid", Set.of("setting")), Map.entry("setting.set", Set.of("setting", "world", "value")),
             Map.entry("selector.given", Set.of()), Map.entry("selector.pending", Set.of()),
+            Map.entry("selector.overflow", Set.of()),
             Map.entry("selector.first", CORNER), Map.entry("selector.second", CORNER),
             Map.entry("selection.missing", Set.of()), Map.entry("selection.different-worlds", Set.of()),
             Map.entry("portal.list-empty", Set.of()), Map.entry("portal.list-entry", Set.of("portal", "world", "target")),

@@ -32,8 +32,8 @@ import org.bukkit.Difficulty;
 import org.bukkit.GameMode;
 
 /**
- * All Atlas MariaDB access. Every row belongs to one server region, so EU and NA share the
- * database without sharing worlds. Methods block and must run on {@code AtlasWorkers}, or at
+ * All Atlas MariaDB access. World rows belong to one server region; selector intents follow
+ * the player across nodes. Methods block and must run on {@code AtlasWorkers}, or at
  * startup before any world is ticking.
  */
 public final class AtlasRepository {
@@ -48,6 +48,10 @@ public final class AtlasRepository {
     /** Creates the tables this plugin uses. */
     public void initialize() throws SQLException {
         try (Connection connection = database.getConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("""
+                    CREATE TABLE IF NOT EXISTS atlas_selector_delivery (
+                      player CHAR(36) NOT NULL PRIMARY KEY, operation_id CHAR(36) NOT NULL UNIQUE,
+                      completed BOOLEAN NOT NULL DEFAULT FALSE)""");
             statement.execute("""
                     CREATE TABLE IF NOT EXISTS atlas_world (
                       server VARCHAR(8) NOT NULL, world VARCHAR(100) NOT NULL, generator VARCHAR(16) NULL,
@@ -930,4 +934,33 @@ public final class AtlasRepository {
 
     /** The region code this repository writes, for messages and tests. */
     public String server() { return server.toUpperCase(Locale.ROOT); }
+
+    /** Network-wide selector intent: pending deliveries retain their ID across nodes and restarts. */
+    public UUID reserveSelector(UUID player, UUID candidate) throws SQLException {
+        try (Connection connection = database.getConnection(); PreparedStatement insert = connection.prepareStatement("""
+                INSERT INTO atlas_selector_delivery (player, operation_id, completed) VALUES (?, ?, FALSE)
+                ON DUPLICATE KEY UPDATE operation_id = IF(completed, VALUES(operation_id), operation_id), completed = FALSE""")) {
+            insert.setString(1, player.toString()); insert.setString(2, candidate.toString()); insert.executeUpdate();
+        }
+        return pendingSelector(player).orElseThrow(() -> new SQLException("Selector intent unavailable"));
+    }
+
+    /** Looks up an existing request without creating a new one. */
+    public Optional<UUID> pendingSelector(UUID player) throws SQLException {
+        try (Connection connection = database.getConnection(); PreparedStatement query = connection.prepareStatement(
+                "SELECT operation_id FROM atlas_selector_delivery WHERE player = ? AND completed = FALSE")) {
+            query.setString(1, player.toString());
+            try (ResultSet rows = query.executeQuery()) {
+                return rows.next() ? Optional.of(UUID.fromString(rows.getString(1))) : Optional.empty();
+            }
+        }
+    }
+
+    /** A late acknowledgement cannot settle a newer selector request. */
+    public void completeSelector(UUID player, UUID operation) throws SQLException {
+        try (Connection connection = database.getConnection(); PreparedStatement update = connection.prepareStatement(
+                "UPDATE atlas_selector_delivery SET completed = TRUE WHERE player = ? AND operation_id = ?")) {
+            update.setString(1, player.toString()); update.setString(2, operation.toString()); update.executeUpdate();
+        }
+    }
 }
