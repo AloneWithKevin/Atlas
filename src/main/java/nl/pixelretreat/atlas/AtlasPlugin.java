@@ -69,6 +69,9 @@ public final class AtlasPlugin extends JavaPlugin {
     private volatile boolean datapackChangedAtStartup;
     private volatile AtlasWorkers workers;
     private volatile CampfireMessages campfire;
+    private volatile nl.pixelretreat.campfire.api.CampfireLocalization authoredLocalization;
+    private final AtomicBoolean catalogRegistering = new AtomicBoolean();
+    private volatile boolean authoredReady;
     private volatile MessageCatalog catalog;
     private volatile ClosetService closet;
     private volatile ContentRegistration closetRegistration;
@@ -232,6 +235,19 @@ public final class AtlasPlugin extends JavaPlugin {
             getServer().getGlobalRegionScheduler().runDelayed(this, task -> install(settings, rules, attempt + 1), 20L);
             return;
         }
+        if (!authoredReady) {
+            var localized = getServer().getServicesManager().load(nl.pixelretreat.campfire.api.CampfireLocalization.class);
+            if (localized == null) { fail(new IllegalStateException("Campfire authored localization unavailable")); return; }
+            if (!catalogRegistering.compareAndSet(false, true)) return;
+            authoredLocalization = localized;
+            localized.register(this).whenComplete((registered, failure) -> {
+                if (stopped.get() || !isEnabled()) return;
+                if (failure != null) { fail(failure); return; }
+                authoredReady = true;
+                getServer().getGlobalRegionScheduler().run(this, ignored -> install(settings, rules, attempt));
+            });
+            return;
+        }
         try {
             AtlasMessages messages = new AtlasMessages(this, Objects.requireNonNull(catalog), delivery);
             reportStartup(messages);
@@ -276,6 +292,7 @@ public final class AtlasPlugin extends JavaPlugin {
 
     private CompletableFuture<Void> reloadAll(RulesService rules, PortalService portals, KeepLoadedService regions) {
         return campfire.reload(this, AtlasMessages::validateCatalog).toCompletableFuture()
+                .thenCompose(ignored -> authoredLocalization.reload(this).toCompletableFuture())
                 .thenCompose(ignored -> rules.reload())
                 .thenCompose(ignored -> CompletableFuture.allOf(portals.reload(), regions.reload()))
                 .thenRun(rules::applyAll);
