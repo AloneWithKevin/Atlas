@@ -27,6 +27,28 @@ import org.junit.jupiter.api.Test;
 
 /** The trading flag flows through the shared flag command, completion, access and info output. */
 class AtlasCommandTest {
+    @Test void consoleSpawnRequiresFiniteExplicitCoordinatesBeforeStorage(){
+        RulesService rules=mock(RulesService.class);
+        when(rules.setSpawn(anyString(),any())).thenReturn(CompletableFuture.completedFuture(null));
+        var command=new AtlasCommand(null,mock(AtlasMessages.class),services(rules,null,null));
+        command.onCommand(admin(),null,"atlas",new String[]{"setspawn","arena","1.5","64","-2","90","0"});
+        verify(rules).setSpawn("atlas:arena",new nl.pixelretreat.atlas.world.SpawnPoint(1.5,64,-2,90,0));
+        clearInvocations(rules);
+        for(String invalid:List.of("NaN","Infinity","oops"))command.onCommand(admin(),null,"atlas",new String[]{"setspawn","arena",invalid,"64","-2","90","0"});
+        command.onCommand(admin(),null,"atlas",new String[]{"setspawn","arena"});
+        verifyNoInteractions(rules);
+    }
+    @Test void consolePortalNormalizesExplicitBoundsAndRejectsOverflowBeforeCreation(){
+        var portals=mock(nl.pixelretreat.atlas.service.PortalService.class);
+        when(portals.create(any())).thenReturn(CompletableFuture.completedFuture(true));
+        var command=new AtlasCommand(null,mock(AtlasMessages.class),new AtlasCommand.Services(config(true),null,null,null,portals,null,null,null,null));
+        command.onCommand(admin(),null,"atlas",new String[]{"portal","create","door","destination","source","3","66","5","1","64","-1"});
+        var captured=org.mockito.ArgumentCaptor.forClass(nl.pixelretreat.atlas.portal.Portal.class);verify(portals).create(captured.capture());
+        var portal=captured.getValue();assertEquals("atlas:source",portal.world());assertEquals(1,portal.minX());assertEquals(3,portal.maxX());assertEquals(-1,portal.minZ());assertEquals(66,portal.maxY());
+        clearInvocations(portals);
+        command.onCommand(admin(),null,"atlas",new String[]{"portal","create","bad","destination","source","-2147483648","-2147483648","-2147483648","2147483647","2147483647","2147483647"});
+        verifyNoInteractions(portals);
+    }
     @Test void flagCompletionIncludesTradingAndStaysAdminOnly() {
         AtlasCommand command = new AtlasCommand(null, null, services(mock(RulesService.class), null, null));
         CommandSender admin = admin();
