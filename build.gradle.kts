@@ -13,8 +13,8 @@ repositories {
 
 val folia = files("../Veyra-release/folia-api/build/libs/folia-api-26.3.local-SNAPSHOT.jar")
 val veyra = files("../.build-deps/veyra-api-item-exchange.jar")
-val campfire = files("../Campfire/build/libs/Campfire-0.6.0-api.jar")
-val closet = files("../.build-deps/closet-api-delivery.jar")
+val campfire = files(providers.gradleProperty("campfireApiJar").getOrElse("../Campfire/build/libs/Campfire-0.7.1-api.jar"))
+val closet = files(providers.gradleProperty("closetApiJar").getOrElse("../Closet/build/libs/Closet-0.1.8-api.jar"))
 
 dependencies {
     compileOnly(folia)
@@ -30,9 +30,9 @@ dependencies {
     testImplementation(folia)
     testImplementation(veyra)
     testImplementation(campfire)
-    testImplementation(files("../Campfire/build/libs/Campfire-0.6.0.jar"))
+    testImplementation(files(providers.gradleProperty("campfireFixtureJar").getOrElse("../Campfire/build/libs/Campfire.jar")))
     testImplementation(closet)
-    testImplementation(files("../Closet/build/libs/Closet-0.1.6.jar"))
+    testImplementation(files(providers.gradleProperty("closetFixtureJar").getOrElse("../Closet/build/libs/Closet-0.1.8-plain.jar")))
     testImplementation(files("../.build-deps/bungeecord-chat.jar"))
     testImplementation("net.kyori:adventure-api:5.2.0")
     testImplementation("net.kyori:adventure-text-minimessage:5.2.0")

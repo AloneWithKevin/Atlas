@@ -26,17 +26,17 @@ help:
     <#A8D5A2>/atlas tp {world} [player]</#A8D5A2>, <#A8D5A2>/atlas spawn [world] [player]</#A8D5A2>, <#A8D5A2>/atlas setspawn</#A8D5A2>
     <#A8D5A2>/atlas flag {world} {flag} {on|off|default}</#A8D5A2>
     <#A8D5A2>/atlas set {world} {difficulty|gamemode|time|weather} {value}</#A8D5A2>
-    <#A8D5A2>/atlas selector</#A8D5A2>, <#A8D5A2>/atlas portal</#A8D5A2>, <#A8D5A2>/atlas keeploaded</#A8D5A2>, <#A8D5A2>/atlas reload</#A8D5A2>
+    <#A8D5A2>/atlas selector [player]</#A8D5A2>, <#A8D5A2>/atlas portal</#A8D5A2>, <#A8D5A2>/atlas keeploaded</#A8D5A2>, <#A8D5A2>/atlas reload</#A8D5A2>
 usage:
   world: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas world list | create {name} {generator} | import {name} {generator} | enable {world} | disable {world} | delete {world} confirm | clone {source} {name} | reset {world} [source] confirm | pending | cancel {id}</#A8D5A2>"
   info: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas info {world}</#A8D5A2>"
   tp: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas tp {world} [player]</#A8D5A2>"
   spawn: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas spawn [world] [player]</#A8D5A2>"
-  setspawn: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas setspawn [world]</#A8D5A2>"
+  setspawn: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas setspawn [world] | setspawn {world} {x} {y} {z} {yaw} {pitch}</#A8D5A2>"
   flag: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas flag {world} {flag} {on|off|default}</#A8D5A2>"
   set: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas set {world} {difficulty|gamemode|time|weather} {value}</#A8D5A2>"
-  portal: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas portal create {name} {world} | delete {name} | list | info {name} | target {name} (spawn {world} | here | server {region} {world} [x y z [yaw pitch]]) | cooldown {name} {millis} | sound {name} {key|none} | particle {name} {particle|none} | restrict {name} {on|off} | fill {name} {block|none}</#A8D5A2>"
-  keeploaded: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas keeploaded set {name} | delete {name} | list</#A8D5A2>"
+  portal: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas portal create {name} {world} [source-world x1 y1 z1 x2 y2 z2] | delete {name} | list | info {name} | target {name} (spawn {world} | here | location {world} {x} {y} {z} {yaw} {pitch} | server {region} {world} [x y z [yaw pitch]]) | cooldown {name} {millis} | sound {name} {key|none} | particle {name} {particle|none} | restrict {name} {on|off} | fill {name} {block|none}</#A8D5A2>"
+  keeploaded: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas keeploaded set {name} [world x1 y1 z1 x2 y2 z2] | delete {name} | list</#A8D5A2>"
 world:
   unknown-generator: "Oops, that generator is unknown. Use <#A8D5A2>normal, flat, void, nether or end</#A8D5A2>."
   created: "All set! World <#F3E5AB><world></#F3E5AB> is declared. It is generated and loaded at the next server start."

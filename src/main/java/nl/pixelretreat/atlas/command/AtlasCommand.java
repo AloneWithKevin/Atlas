@@ -90,7 +90,7 @@ public final class AtlasCommand implements TabExecutor {
             case "setspawn" -> setSpawn(sender, ready, rest);
             case "flag" -> flag(sender, ready, rest);
             case "set" -> setting(sender, ready, rest);
-            case "selector" -> selector(sender, ready);
+            case "selector" -> selector(sender, ready, rest);
             case "portal" -> portal(sender, ready, rest);
             case "keeploaded" -> keepLoaded(sender, ready, rest);
             case "reload" -> ready.reload().get().whenComplete((done, failure) ->
@@ -257,6 +257,17 @@ public final class AtlasCommand implements TabExecutor {
     }
 
     private void setSpawn(CommandSender sender, Services s, String[] args) {
+        if (args.length == 6) {
+            Optional<String> world = worldKey(sender, args[0]);
+            if (world.isEmpty()) return;
+            try {
+                SpawnPoint point = point(args, 1);
+                s.rules().setSpawn(world.get(), point).whenComplete((done, failure) -> messages.reply(sender, failure,
+                    "spawn.set", Map.of("world", WorldNames.shortName(world.get()))));
+            } catch (IllegalArgumentException invalid) { messages.send(sender, "usage.setspawn"); }
+            return;
+        }
+        if (!(sender instanceof Player)) { messages.send(sender, "usage.setspawn"); return; }
         if (!(sender instanceof Player player)) { messages.send(sender, "common.players-only"); return; }
         if (args.length > 1) { messages.send(sender, "usage.setspawn"); return; }
         String here = RulesService.key(player.getWorld());
@@ -346,8 +357,13 @@ public final class AtlasCommand implements TabExecutor {
 
     // ---- selector, portals and keep-loaded regions --------------------------------------------
 
-    private void selector(CommandSender sender, Services s) {
-        if (!(sender instanceof Player player)) { messages.send(sender, "common.players-only"); return; }
+    private void selector(CommandSender sender, Services s, String[] args) {
+        Player player;
+        if (args.length == 1) {
+            player = plugin.getServer().getPlayerExact(args[0]);
+            if (player == null) { messages.send(sender, "common.player-offline", Map.of("player", args[0])); return; }
+        } else if (args.length == 0 && sender instanceof Player self) player = self;
+        else { messages.send(sender, "help.lines"); return; }
         s.giveSelector().apply(player).whenComplete((given, failure) -> {
             String key = failure != null || given == null ? "selector.pending" : switch (given) {
                 case GIVEN -> "selector.given";
@@ -383,10 +399,12 @@ public final class AtlasCommand implements TabExecutor {
         Map<String, String> named = Map.of("portal", name);
         switch (action) {
             case "create" -> {
-                if (args.length != 3) { messages.send(sender, "usage.portal"); return; }
+                if (args.length != 3 && args.length != 10) { messages.send(sender, "usage.portal"); return; }
                 Optional<String> target = worldKey(sender, args[2]);
                 if (target.isEmpty()) return;
-                selection(sender, s).ifPresent(bounds -> {
+                Optional<SelectionService.Bounds> chosen = args.length == 3 ? selection(sender, s)
+                    : explicitBounds(sender, args, 3);
+                chosen.ifPresent(bounds -> {
                     Portal portal = new Portal(name, bounds.world(), bounds.minX(), bounds.minY(), bounds.minZ(),
                             bounds.maxX(), bounds.maxY(), bounds.maxZ(), PortalTarget.spawn(target.get()),
                             s.config().defaultCooldownMillis(), Optional.empty(), Optional.empty(), false, Optional.empty());
@@ -490,6 +508,11 @@ public final class AtlasCommand implements TabExecutor {
             Location at = player.getLocation();
             target = new PortalTarget(PortalTarget.Kind.LOCATION, Optional.empty(), RulesService.key(player.getWorld()),
                     Optional.of(new SpawnPoint(at.getX(), at.getY(), at.getZ(), at.getYaw(), at.getPitch())));
+        } else if (args.length == 7 && args[0].equalsIgnoreCase("location")) {
+            Optional<String> world = worldKey(sender, args[1]);
+            if (world.isEmpty()) return;
+            try { target = new PortalTarget(PortalTarget.Kind.LOCATION, Optional.empty(), world.get(), Optional.of(point(args, 2))); }
+            catch (IllegalArgumentException invalid) { messages.send(sender, "usage.portal"); return; }
         } else if ((args.length == 3 || args.length == 6 || args.length == 8) && args[0].equalsIgnoreCase("server")) {
             String region = args[1].toUpperCase(Locale.ROOT);
             if (!region.equals(s.config().otherRegion())) { messages.send(sender, "portal.invalid-region"); return; }
@@ -544,12 +567,14 @@ public final class AtlasCommand implements TabExecutor {
                 });
             }
             case "set" -> {
-                if (args.length != 2 || !args[1].toLowerCase(Locale.ROOT).matches("[a-z0-9_-]{1,64}")) {
+                if ((args.length != 2 && args.length != 9) || !args[1].toLowerCase(Locale.ROOT).matches("[a-z0-9_-]{1,64}")) {
                     messages.send(sender, "usage.keeploaded");
                     return;
                 }
                 String name = args[1].toLowerCase(Locale.ROOT);
-                selection(sender, s).ifPresent(bounds -> {
+                Optional<SelectionService.Bounds> chosen = args.length == 2 ? selection(sender, s)
+                    : explicitBounds(sender, args, 2);
+                chosen.ifPresent(bounds -> {
                     KeepLoadedRegion region = KeepLoadedRegion.fromBlocks(name, bounds.world(),
                             bounds.minX(), bounds.minZ(), bounds.maxX(), bounds.maxZ());
                     if (region.chunkCount() > s.config().maxChunksPerRegion()) {
@@ -574,6 +599,26 @@ public final class AtlasCommand implements TabExecutor {
     }
 
     // ---- helpers ------------------------------------------------------------------------------
+
+    private static SpawnPoint point(String[] args, int start) {
+        var point = new SpawnPoint(Double.parseDouble(args[start]), Double.parseDouble(args[start + 1]),
+            Double.parseDouble(args[start + 2]), Float.parseFloat(args[start + 3]), Float.parseFloat(args[start + 4]));
+        if (!Double.isFinite(point.x()) || !Double.isFinite(point.y()) || !Double.isFinite(point.z())
+                || !Float.isFinite(point.yaw()) || !Float.isFinite(point.pitch())) throw new IllegalArgumentException("Non-finite point");
+        return point;
+    }
+
+    private Optional<SelectionService.Bounds> explicitBounds(CommandSender sender, String[] args, int start) {
+        Optional<String> world = worldKey(sender, args[start]);
+        if (world.isEmpty()) return Optional.empty();
+        try {
+            int x1 = Integer.parseInt(args[start + 1]), y1 = Integer.parseInt(args[start + 2]), z1 = Integer.parseInt(args[start + 3]);
+            int x2 = Integer.parseInt(args[start + 4]), y2 = Integer.parseInt(args[start + 5]), z2 = Integer.parseInt(args[start + 6]);
+            Math.multiplyExact(Math.multiplyExact(Math.abs((long)x1 - x2) + 1, Math.abs((long)y1 - y2) + 1), Math.abs((long)z1 - z2) + 1);
+            return Optional.of(new SelectionService.Bounds(world.get(), Math.min(x1, x2), Math.min(y1, y2), Math.min(z1, z2),
+                Math.max(x1, x2), Math.max(y1, y2), Math.max(z1, z2)));
+        } catch (IllegalArgumentException | ArithmeticException invalid) { messages.send(sender, "help.lines"); return Optional.empty(); }
+    }
 
     private Optional<String> worldKey(CommandSender sender, String input) {
         Optional<String> key = WorldNames.key(input);
@@ -609,6 +654,7 @@ public final class AtlasCommand implements TabExecutor {
             case 2 -> switch (first) {
                 case "world" -> WORLD;
                 case "info", "tp", "spawn", "setspawn", "flag", "set" -> worlds;
+                case "selector" -> plugin.getServer().getOnlinePlayers().stream().map(Player::getName).toList();
                 case "portal" -> PORTAL;
                 case "keeploaded" -> KEEP_LOADED;
                 default -> List.of();
@@ -644,7 +690,7 @@ public final class AtlasCommand implements TabExecutor {
                 };
                 case "portal" -> switch (args[1].toLowerCase(Locale.ROOT)) {
                     case "create" -> worlds;
-                    case "target" -> List.of("spawn", "here", "server");
+                    case "target" -> List.of("spawn", "here", "location", "server");
                     case "restrict" -> List.of("on", "off");
                     case "sound", "particle", "fill" -> List.of("none");
                     default -> List.of();
@@ -653,7 +699,7 @@ public final class AtlasCommand implements TabExecutor {
             };
             case 5 -> first.equals("world") && args[1].equalsIgnoreCase("reset") ? List.of("confirm")
                     : first.equals("portal") && args[1].equalsIgnoreCase("target")
-                    ? (args[3].equalsIgnoreCase("spawn") ? worlds
+                    ? (args[3].equalsIgnoreCase("spawn") || args[3].equalsIgnoreCase("location") ? worlds
                     : args[3].equalsIgnoreCase("server") ? List.of(ready.config().otherRegion()) : List.of())
                     : List.of();
             default -> List.of();

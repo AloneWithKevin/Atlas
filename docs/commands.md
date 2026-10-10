@@ -78,3 +78,18 @@ request without creating another one. A completed request permits a new selector
 
 `/atlas reload` reloads `messages.yml` through Campfire and re-reads worlds, portals and regions
 from the database. `config.yml` changes need a restart.
+
+## Console administration — 11 October 2026
+
+All `/atlas` actions require `atlas.admin`. Console input is explicit:
+
+- `atlas setspawn <world> <x> <y> <z> <yaw> <pitch>`
+- `atlas selector <online-local-player>`
+- `atlas portal create <name> <target-world> <source-world> <x1> <y1> <z1> <x2> <y2> <z2>`
+- `atlas portal target <name> location <world> <x> <y> <z> <yaw> <pitch>`
+- `atlas keeploaded set <name> <world> <x1> <y1> <z1> <x2> <y2> <z2>`
+
+Bounds are ordered; invalid/non-finite coordinates and overflowing volumes are
+refused. Keep-loaded still uses the existing maximum chunk count. GUI selection
+forms remain available in game. Existing teleport forms require their explicit
+online local target in console. No implicit world, position or direction is added.
