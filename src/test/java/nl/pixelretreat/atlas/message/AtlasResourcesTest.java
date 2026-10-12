@@ -158,8 +158,8 @@ class AtlasResourcesTest {
     @Test void selectorGlyphUsesExternalBitmapAndDoesNotChangeTextFont() throws Exception {
         Path content = Path.of("content");
         var image = ImageIO.read(content.resolve("assets/pixelretreat/textures/gui/atlas_lore/action.png").toFile());
-        assertEquals(16, image.getWidth());
-        assertEquals(16, image.getHeight());
+        assertEquals(64, image.getWidth());
+        assertEquals(64, image.getHeight());
         assertTrue(image.getColorModel().hasAlpha());
         assertEquals(0, image.getRGB(0, 0) >>> 24);
         var font = new org.yaml.snakeyaml.Yaml().loadAs(Files.readString(content.resolve("assets/atlas/font/lore.json")), Map.class);
