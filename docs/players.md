@@ -90,3 +90,6 @@ Try the portal again. If it keeps happening, tell a staff member which portal yo
 
 **There are no monsters here at all.**
 Monsters are turned off in this world. That is on purpose.
+
+
+Resource-pack images and fonts are supplied by Closet. After a matching server update, accept the new pack to see the existing item and menu icons.

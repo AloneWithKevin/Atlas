@@ -204,7 +204,7 @@ public final class AtlasPlugin extends JavaPlugin {
                     catalog = registered;
                     return registered;
                 })
-                .thenCompose(registered -> items.register(this).toCompletableFuture())
+                .thenCompose(registered -> items.registerWithClosetAssets(this).toCompletableFuture())
                 .thenCompose(registration -> {
                     closetRegistration = registration;
                     return rules.reload();
