@@ -158,7 +158,7 @@ public final class AtlasPlugin extends JavaPlugin {
     }
 
     /** How many times Atlas waits for a network contract before giving up, and the gap in ticks. */
-    private static final int CONTRACT_ATTEMPTS = 60;
+    private static final int CONTRACT_ATTEMPTS = 300;
     private static final long CONTRACT_INTERVAL_TICKS = 20L;
 
     private void connect(AtlasConfig settings, RulesService rules) {
