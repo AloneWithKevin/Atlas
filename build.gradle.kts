@@ -14,7 +14,7 @@ repositories {
 val folia = files("../Veyra-release/folia-api/build/libs/folia-api-26.3.local-SNAPSHOT.jar")
 val veyra = files("../.build-deps/veyra-api-item-exchange.jar")
 val campfire = files(providers.gradleProperty("campfireApiJar").getOrElse("../Campfire/build/libs/Campfire-0.7.1-api.jar"))
-val closet = files(providers.gradleProperty("closetApiJar").getOrElse("../Closet/build/libs/Closet-0.1.8-api.jar"))
+val closet = files(providers.gradleProperty("closetApiJar").getOrElse("../Closet/build/libs/Closet-0.1.11-api.jar"))
 
 dependencies {
     compileOnly(folia)
@@ -32,7 +32,7 @@ dependencies {
     testImplementation(campfire)
     testImplementation(files(providers.gradleProperty("campfireFixtureJar").getOrElse("../Campfire/build/libs/Campfire.jar")))
     testImplementation(closet)
-    testImplementation(files(providers.gradleProperty("closetFixtureJar").getOrElse("../Closet/build/libs/Closet-0.1.8-plain.jar")))
+    testImplementation(files(providers.gradleProperty("closetFixtureJar").getOrElse("../Closet/build/libs/Closet-0.1.11-plain.jar")))
     testImplementation(files("../.build-deps/bungeecord-chat.jar"))
     testImplementation("net.kyori:adventure-api:5.2.0")
     testImplementation("net.kyori:adventure-text-minimessage:5.2.0")
@@ -69,3 +69,6 @@ tasks.shadowJar {
     mergeServiceFiles()
 }
 tasks.build { dependsOn(tasks.shadowJar) }
+
+// Closet is the sole resource-pack owner; consumers ship definitions only.
+tasks.processResources { exclude("**/assets/**", "**/*.png", "**/*.ogg", "**/*.zip") }

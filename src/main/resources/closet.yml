@@ -1,5 +1,4 @@
 schema: 1
-assets-root: content
 items:
   atlas:selector:
     category: atlas

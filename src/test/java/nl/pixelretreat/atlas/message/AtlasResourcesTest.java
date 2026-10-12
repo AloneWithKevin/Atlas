@@ -71,29 +71,23 @@ class AtlasResourcesTest {
             var catalog = localization.register(owner).toCompletableFuture().get();
             var contribution = new ContributionYaml().load(directory);
             assertEquals(1, contribution.items().size());
-            assertEquals(directory.resolve("content"), contribution.assetsRoot());
-            // External authoring content is read directly, never copied into build output.
-            Path ownerRoot = Path.of(".").toAbsolutePath().normalize();
-            var external = new ContentContribution(contribution.items(), contribution.glyphs(), ownerRoot.resolve("content"));
-            var assets = new ContributionValidator().validate(external, ownerRoot, catalog);
-            assertEquals(Set.of("assets/atlas/font/lore.json",
-                    "assets/pixelretreat/textures/gui/atlas_lore/action.png"), assets.sha256().keySet());
+            assertNull(contribution.assetsRoot());
             var localizationApi = mock(CampfireLocalization.class);
             when(localizationApi.register(owner)).thenReturn(CompletableFuture.completedFuture(catalog));
             var runtime = mock(CampfireRuntime.class);
             when(runtime.localization()).thenReturn(localizationApi);
-            when(owner.getDataFolder()).thenReturn(ownerRoot.toFile());
             var provider = mock(Plugin.class);
             when(provider.isEnabled()).thenReturn(true);
             try (var worker = Executors.newSingleThreadExecutor();
-                 var service = new DefaultClosetService(provider, mock(VeyraCluster.class), runtime, worker)) {
-                assertTrue(service.register(owner, external).toCompletableFuture().get(5, TimeUnit.SECONDS).active());
+                 var service = nl.pixelretreat.packtest.CentralPackFixture.service(owner, mock(VeyraCluster.class), runtime, worker)) {
+                assertTrue(service.registerWithClosetAssets(owner, contribution).toCompletableFuture().get(5, TimeUnit.SECONDS).active());
                 assertTrue(service.catalog().items().containsKey(ItemId.parse("atlas:selector")));
                 assertEquals(1, service.catalog().glyphs().size());
                 assertEquals(Key.key("atlas:lore"), service.glyph(ItemId.parse("atlas:lore/action")).font());
                 assertEquals("\uE000", PlainTextComponentSerializer.plainText().serialize(
                         service.glyph(ItemId.parse("atlas:lore/action"))));
-                assertEquals(assets.sha256(), service.packInputs().get("atlas").sha256());
+                assertTrue(service.packInputs().get("atlas").sha256().isEmpty());
+                assertTrue(service.packInputs().get("closet").sha256().containsKey("assets/atlas/font/lore.json"));
             }
         }
     }
@@ -156,7 +150,7 @@ class AtlasResourcesTest {
     }
 
     @Test void selectorGlyphUsesExternalBitmapAndDoesNotChangeTextFont() throws Exception {
-        Path content = Path.of("content");
+        Path content = nl.pixelretreat.packtest.CentralPackFixture.path("content");
         var image = ImageIO.read(content.resolve("assets/pixelretreat/textures/gui/atlas_lore/action.png").toFile());
         assertEquals(64, image.getWidth());
         assertEquals(64, image.getHeight());
