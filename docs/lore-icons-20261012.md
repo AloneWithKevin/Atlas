@@ -1,3 +1,5 @@
+> **Historical release note (12 October 2026).** This file records the earlier icon-resolution release. Closet is the sole owner of the current selector action glyph texture/font source and installed copy. Historical Atlas content paths do not establish current asset ownership. See [content](content.md) and [Closet pack ownership](closet-pack-ownership.md).
+
 # Lore icons — 12 October 2026
 
 Ferry selected inventory numbers 1, 2, 6, 12, 13, 21 and 28–36 for redesign,

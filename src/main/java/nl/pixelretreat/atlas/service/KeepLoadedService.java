@@ -15,6 +15,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.Callable;
 import nl.pixelretreat.atlas.keeploaded.KeepLoadedRegion;
 import nl.pixelretreat.atlas.storage.AtlasRepository;
+import nl.pixelretreat.atlas.statistics.AtlasStatistics;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.plugin.Plugin;
@@ -27,6 +28,7 @@ public final class KeepLoadedService {
     private final Plugin plugin;
     private final AtlasRepository repository;
     private final AtlasWorkers workers;
+    private volatile AtlasStatistics statistics;
     private final AtomicReference<List<KeepLoadedRegion>> regions = new AtomicReference<>(List.of());
     /** World key → chunk keys holding an Atlas ticket. Guarded by ticketLock. */
     private final Map<String, Set<Long>> ticketed = new HashMap<>();
@@ -42,6 +44,8 @@ public final class KeepLoadedService {
         this.workers = workers;
     }
 
+    public void statistics(AtlasStatistics statistics) { this.statistics = statistics; }
+
     /** Loads the regions and reconciles every world's tickets. */
     public CompletableFuture<Void> reload() {
         synchronized (ticketLock) {
@@ -56,7 +60,11 @@ public final class KeepLoadedService {
                 if (closed) return CompletableFuture.failedFuture(new CancellationException());
                 if (revision != loadRevision.get()) return CompletableFuture.completedFuture(null);
                 regions.set(loaded.regions());
-                return reconcile(loaded.desired(), revision);
+                return reconcile(loaded.desired(), revision).thenRun(() -> {
+                    AtlasStatistics current = statistics;
+                    if (current != null && revision == loadRevision.get())
+                        current.currentKeepLoadedSnapshot(loaded.regions().size(), ticketCount());
+                });
             }
         });
     }

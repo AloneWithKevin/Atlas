@@ -9,6 +9,14 @@ import nl.pixelretreat.atlas.world.SpawnPoint;
 import org.junit.jupiter.api.Test;
 
 class PortalIndexTest {
+    @Test void extremeBoundsRemainCompactAndOverflowCannotMasqueradeAsSmallFill() {
+        Portal huge = portal("huge", Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE);
+        var index = assertTimeoutPreemptively(java.time.Duration.ofSeconds(2), () -> new PortalIndex(List.of(huge)));
+        assertEquals(huge, index.at("minecraft:overworld", Integer.MAX_VALUE, 60, Integer.MIN_VALUE).orElseThrow());
+        assertTrue(index.anyInChunk("minecraft:overworld", Integer.MIN_VALUE >> 4, Integer.MAX_VALUE >> 4));
+        assertThrows(ArithmeticException.class, huge::volume);
+    }
+
     private static Portal portal(String name, int minX, int minZ, int maxX, int maxZ) {
         return new Portal(name, "minecraft:overworld", minX, 60, minZ, maxX, 63, maxZ, PortalTarget.spawn("atlas:arena"),
                 2500, Optional.empty(), Optional.empty(), false, Optional.empty());

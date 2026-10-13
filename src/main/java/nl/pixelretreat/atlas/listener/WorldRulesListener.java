@@ -162,19 +162,20 @@ public final class WorldRulesListener implements Listener {
     /** Natural weather changes are refused while the weather cycle is off; Atlas' own changes pass. */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onWeatherChange(WeatherChangeEvent event) {
-        if (event.getCause() != WeatherChangeEvent.Cause.PLUGIN && rules.ready()) deny(event, event.getWorld(), AtlasFlag.WEATHER);
+        if (event.getCause() != WeatherChangeEvent.Cause.PLUGIN) deny(event, event.getWorld(), AtlasFlag.WEATHER);
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onThunderChange(ThunderChangeEvent event) {
-        if (event.getCause() != ThunderChangeEvent.Cause.PLUGIN && rules.ready()) deny(event, event.getWorld(), AtlasFlag.WEATHER);
+        if (event.getCause() != ThunderChangeEvent.Cause.PLUGIN) deny(event, event.getWorld(), AtlasFlag.WEATHER);
     }
 
     /** Sleeping through the night is refused when time skipping is off or the time is fixed. */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onTimeSkip(TimeSkipEvent event) {
-        if (event.getSkipReason() != ClockTimeSkipEvent.SkipReason.NIGHT_SKIP || !rules.ready()) return;
+        if (event.getSkipReason() != ClockTimeSkipEvent.SkipReason.NIGHT_SKIP) return;
         RulesSnapshot snapshot = rules.snapshot();
+        if (snapshot == null) { event.setCancelled(true); return; }
         String key = RulesService.key(event.getWorld());
         if (!snapshot.flag(key, AtlasFlag.TIME_SKIP) || snapshot.worldOrBuiltIn(key).fixedTime().isPresent()) {
             event.setCancelled(true);

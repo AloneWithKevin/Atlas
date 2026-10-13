@@ -37,6 +37,12 @@ public final class RulesService implements AtlasRules {
     private final AtlasWorkers workers;
     private final AtlasConfig config;
     private final AtomicReference<RulesSnapshot> snapshot = new AtomicReference<>();
+    private final Object publicationLock = new Object();
+
+    /** Orders source changes and snapshot/data-pack publication on bounded I/O workers. */
+    public <T> CompletableFuture<T> serialized(java.util.concurrent.Callable<T> action) {
+        return workers.submit(() -> { synchronized (publicationLock) { return action.call(); } });
+    }
 
     public RulesService(Plugin plugin, AtlasRepository repository, AtlasWorkers workers, AtlasConfig config) {
         this.plugin = plugin;
@@ -53,7 +59,7 @@ public final class RulesService implements AtlasRules {
 
     /** Loads every world record from the database and publishes a new snapshot. */
     public CompletableFuture<RulesSnapshot> reload() {
-        return workers.submit(() -> {
+        return serialized(() -> {
             RulesSnapshot loaded = new RulesSnapshot(repository.loadWorlds(), config.defaultFlags());
             snapshot.set(loaded);
             return loaded;
@@ -79,7 +85,7 @@ public final class RulesService implements AtlasRules {
     private interface DatabaseChange { void run() throws Exception; }
 
     private CompletableFuture<Void> change(String worldKey, boolean weatherChanged, DatabaseChange change) {
-        return workers.submit(() -> {
+        return serialized(() -> {
             change.run();
             snapshot.set(new RulesSnapshot(repository.loadWorlds(), config.defaultFlags()));
             return null;
@@ -141,7 +147,7 @@ public final class RulesService implements AtlasRules {
     /** Forces the world's game mode on a player unless the player may keep their own. Entity thread. */
     public void applyGameMode(Player player) {
         RulesSnapshot current = snapshot.get();
-        if (current == null || player.hasPermission(GAMEMODE_BYPASS)) return;
+        if (current == null || player.isOp() || player.hasPermission(GAMEMODE_BYPASS)) return;
         current.worldOrBuiltIn(key(player.getWorld())).gameMode().ifPresent(mode -> {
             if (player.getGameMode() != mode) player.setGameMode(mode);
         });

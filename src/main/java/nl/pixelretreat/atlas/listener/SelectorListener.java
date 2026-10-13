@@ -45,7 +45,7 @@ public final class SelectorListener implements Listener {
         if (event.getHand() != EquipmentSlot.HAND || !isSelector(event.getItem())) return;
         event.setCancelled(true);
         Player player = event.getPlayer();
-        if (!player.hasPermission(ADMIN)) { messages.send(player, "common.permission"); return; }
+        if (!player.isOp() && !player.hasPermission(ADMIN)) { messages.send(player, "common.permission"); return; }
         Block block = event.getClickedBlock();
         if (block == null) return;
         int corner;

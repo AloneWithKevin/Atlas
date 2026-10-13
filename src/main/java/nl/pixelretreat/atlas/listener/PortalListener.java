@@ -50,19 +50,35 @@ public final class PortalListener implements Listener {
         Portal portal = found.get();
         Player player = event.getPlayer();
         RulesSnapshot snapshot = rules.snapshot();
-        if (snapshot == null || !snapshot.flag(world, AtlasFlag.PORTALS)) return;
-        if (!player.hasPermission(USE) || portal.restricted() && !player.hasPermission(portal.permission())) return;
-        if (!portals.startCooldown(player, portal)) return;
+        if (snapshot == null) {
+            portals.recordAttempt(player.getUniqueId(), portal.name(), "refused", "rules_unavailable");
+            return;
+        }
+        if (!snapshot.flag(world, AtlasFlag.PORTALS)) {
+            portals.recordAttempt(player.getUniqueId(), portal.name(), "refused", "world_flag_disabled");
+            return;
+        }
+        if (!player.isOp() && (!player.hasPermission(USE) || portal.restricted() && !player.hasPermission(portal.permission()))) {
+            portals.recordAttempt(player.getUniqueId(), portal.name(), "refused", "permission");
+            return;
+        }
+        if (!portals.startCooldown(player, portal)) {
+            portals.recordAttempt(player.getUniqueId(), portal.name(), "refused", "cooldown");
+            return;
+        }
         portals.travel(player, portal).whenComplete((travel, failure) -> {
-            if (failure != null) { messages.send(player, "portal.failed"); return; }
-            switch (travel) {
-                case ARRIVED -> { }
-                case SWITCHING -> messages.send(player, "portal.switching",
-                        Map.of("region", portal.target().region().orElse("")));
-                case TARGET_MISSING -> messages.send(player, "portal.target-missing",
-                        Map.of("world", WorldNames.shortName(portal.target().world())));
-                case FAILED -> messages.send(player, "portal.failed");
-            }
+            portals.onPlayerScheduler(player, current -> {
+                if (failure != null) { messages.send(current, "portal.failed"); return; }
+                switch (travel) {
+                    case ARRIVED -> { }
+                    case SWITCHING -> messages.send(current, "portal.switching",
+                            Map.of("region", portal.target().region().orElse("")));
+                    case TARGET_MISSING -> messages.send(current, "portal.target-missing",
+                            Map.of("world", WorldNames.shortName(portal.target().world())));
+                    case FAILED -> messages.send(current, "portal.failed");
+                    case INVALID_TARGET -> messages.send(current, "portal.invalid-region");
+                }
+            });
         });
     }
 

@@ -1,28 +1,15 @@
-# External selector lore content
+# Atlas item and glyph definitions
 
-Atlas 0.1.3 contributes one mini-glyph through its shipped `closet.yml`:
+Atlas defines one Closet item: `atlas:selector`.
 
-| ID | Font and codepoint | Display metrics | Texture |
+| Stable ID | Definition | Function | Acquisition |
 | --- | --- | --- | --- |
-| `atlas:lore/action` | `atlas:lore`, U+E000 | width 8, height 8, ascent 7 | `pixelretreat:gui/atlas_lore/action.png`, transparent 16x16 |
+| `atlas:selector` | One unbreakable `WOODEN_AXE`, maximum stack size 1, with Atlas name and lore keys. | Staff mark the first corner with a left-click and the second with a right-click. The same selection supports portal bounds and keep-loaded regions. | Staff only, through `/atlas selector` or `/atlas selector <online-local-player>`. There is no recipe, public grant, reward, or player shop route. Closet owns delivery and any overflow. |
 
-The generic green action marker is a byte-exact reuse of the preserved
-`pixelretreat:gui/scrapbook_lore/action.png` bitmap. Its SHA-256 is
-`01458A139E1E62FF3C27A2402E9A557B0A692EC65E8EEC16FFFA7B5F9FC41C81`.
-The original is retained. Atlas owns the new font and texture paths, so registration
-does not collide with other owners' paths or modify a shared font/codepoint.
+The lore references the Closet glyph `atlas:lore/action`: font `atlas:lore`, codepoint U+E000, display width/height 8 and ascent 7. The glyph is an action cue, not a new command or feature. Selector text retains the approved action wording and corner order.
 
-The selector's existing `items.selector.lore` begins with this font-qualified icon.
-The text after it, including the two-space separator, remains unchanged. Closet's
-validated asynchronous owner registration automatically contributes both assets to
-the pack inputs and lists the glyph in its catalog.
+Atlas contains only the item and glyph definitions. Closet is the sole owner of the texture, font and all other resource-pack files. Their maintained source and installed pack live under Closet. Atlas does not bundle asset files in its JAR, extract them to its data folder, or register a duplicate asset source. See [Closet ownership](closet-pack-ownership.md).
 
-For a separately authorized release, install the repository's `content/assets/` tree beneath
-the Atlas data folder's `content/`, alongside the matching manifest and message catalog.
-Assets are not extracted from the JAR and are never copied into code build output.
-Missing content fails registration. The matching Closet pack must be built and
-published through its approved release process before client rendering can be accepted.
-That installation/publication was not performed by this source task.
+Atlas creates no custom block, machine, recipe, reward, GUI icon or preview item. A portal can be filled with an ordinary placeable block and the configured portal region restores the affected fill when removed; the fill is not a Closet item identity.
 
-Keep documentation outside `content/`: Closet validates every file under that
-asset root as a pack input.
+The selector is not a survival-player tool. In-game confirmation should check its name/lore/glyph and corner-selection behavior after the matching Closet pack has been loaded.

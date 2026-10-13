@@ -1,18 +1,16 @@
 # Permissions
 
-| Node | Default | Allows | Children |
-| --- | --- | --- | --- |
-| `atlas.admin` | op | Every `/atlas` command, tab completion and using the Atlas Selector. | `atlas.gamemode.bypass` |
-| `atlas.portal.use` | true | Travelling through Atlas portals. | — |
-| `atlas.gamemode.bypass` | op | Keeping your own game mode in worlds with a forced game mode. | — |
-| `atlas.portal.<name>` | op | Using the portal `<name>` while it is restricted. Registered at runtime for each restricted portal. | — |
+Every `/atlas` administration command, its tab completion, and selector issuance requires `atlas.admin`. OP is explicitly admitted in command and listener checks. `atlas.admin` has the declared child `atlas.gamemode.bypass: true`.
 
-There is one admin node for all staff commands (owner decision 2026-09-29: no per-subcommand
-nodes). No node uses `default: false`; operators hold every node. Rank allocation is recorded in
-`PixelRetreat - Documentation/Ranks.md`.
+| Permission | Default | Purpose | Children | Approved rank allocation | Current read-only LuckPerms evidence |
+| --- | --- | --- | --- | --- | --- |
+| `atlas.admin` | OP | Every Atlas management command and staff selector delivery. | `atlas.gamemode.bypass: true` | `manager`, recorded in `Ranks.md`. | No explicit Atlas grant was found on groups or users in the captured database; runtime manager grant is therefore not verified. |
+| `atlas.gamemode.bypass` | OP | Keep your game mode while in a world with a forced game mode. | None of its own. | `manager`, recorded in `Ranks.md`; also inherited from `atlas.admin`. | No explicit Atlas grant was found on groups or users in the captured database; runtime manager grant is therefore not verified. |
+| `atlas.portal.use` | `true` | Use Atlas portals. | None. | `default`, recorded in `Ranks.md`. | No explicit grant was found; Bukkit's declared `true` default currently admits non-OP players. |
+| `atlas.portal.<name>` | OP, registered at runtime for each restricted portal | Additional access to that portal. | None. | Deliberately unassigned by Ferry's 4 October decision. | No explicit Atlas grant was found on groups or users. |
 
-The owner's recorded distribution is resolved: `atlas.admin` and
-`atlas.gamemode.bypass` belong to `manager`; `atlas.portal.use` belongs to
-`default`. Runtime `atlas.portal.<name>` is deliberately unassigned by the
-2026-10-04 decision. There are no numeric or unlimited families and no new
-permission for selector overflow. No runtime rank grants are applied by this release.
+There are no numeric, unlimited or exemption permission families. The dynamic portal permission remains deliberately unassigned. OP access is implemented separately from non-OP rank allocation.
+
+The approved allocations are written in [Ranks.md](../../PixelRetreat%20-%20Documentation/Ranks.md). They are rank decisions, not proof that the same grants are installed in LuckPerms. The current read-only capture found no explicit Atlas nodes on any captured group or player. No runtime permission provider or grant was changed by this audit. Before relying on manager administration in game, verify the installed grant through the owner's normal permission-management process.
+
+The staff-panel `Ranks 11/09` task (ID 94, updated 23 September 2026) has no Atlas-specific limits. Atlas has no rank caps.

@@ -1,85 +1,28 @@
-# Comparison with PixelWorlds
+# PixelWorlds feature comparison
 
-Source inventory: `.research/atlas/feature-review.md` (PixelWorlds `4fd52b9`). Owner decisions of
-2026-10-01 are numbered D1–D13 there. "Changed" lines were approved by those decisions.
+The full old-plugin inventory and owner decision record is preserved in [the original feature review](../../.research/atlas/feature-review.md). This table describes the current Atlas implementation and its accepted differences.
 
-| # | PixelWorlds feature | Atlas | Status |
-| --- | --- | --- | --- |
-| 1 | `/pw create` | `/atlas world create <name> <generator>`; active after the next start (D1). Per-world seeds are not available for data pack dimensions; new worlds use the server seed. | Changed (D1) |
-| 2 | Void generator, `/pw void` | `void` generator (flat, no layers, void biome). Switching an existing world's generator is replaced by declaring it with the wanted generator; existing chunks never change. | Changed (D1, D2) |
-| 3 | `/pw import` | `/atlas world import <name> <generator>` for folders in `dimensions/atlas/`. | Kept, restart-applied |
-| 4 | `/pw load`, auto-load | `/atlas world enable`; every enabled world loads at startup. | Changed (D1) |
-| 5 | `/pw unload [save\|nosave]` | `/atlas world disable`; unloads at the next start (Minecraft saves normally). Keep-loaded regions still block it; portals now block it too. | Changed (D1) |
-| 6 | `/pw delete … confirm` | `/atlas world delete … confirm`; folder deleted at the next start. Same guards. | Changed (D1) |
-| 7 | `/pw clone` | `/atlas world clone`; copied at startup from an unloaded source (fixes the inconsistent live copy). Paper's world identity is not copied. Preparation and activation use two starts with durable evidence. | Kept, improved |
-| 8 | `/pw reset … confirm` | `/atlas world reset … confirm`; copy is prepared beside the undeclared target, checksum-verified and published with atomic moves; original retained. Activation follows on the next start. See [recovery](world-recovery.md). | Kept, improved |
-| 9 | `/pw tp <world> [player]` | `/atlas tp`; one async teleport, no fallback chain, no console logging (D8). The world must already be loaded (no on-demand loading on Veyra). | Changed (D8) |
-| 10 | `/pw spawn [world] [player]` | `/atlas spawn`. | Kept |
-| 11 | `/pw setspawn [world]` | `/atlas setspawn`; must be run in the world itself (the old command stored another world's coordinates). Stored spawn keeps its own direction. | Kept, fixed |
-| 12 | `/pw info` | `/atlas info` plus `/atlas world list`. Folder path no longer shown. | Kept |
-| 13 | 20 flags | Same 20 flags plus `plugin-hostile-mobs`, `plugin-friendly-mobs` (D4), `portals`, `time-skip` (D2) and `trading` (Handshake integration, 0.1.1); `default` removes an override. | Extended |
-| 14 | `/pw difficulty` | `/atlas set <world> difficulty`, plus `default`. | Kept |
-| 15 | `/pw gamemode` (no bypass) | `/atlas set <world> gamemode`, plus `none`; `atlas.gamemode.bypass` (D5, D10). | Changed (D5) |
-| 16 | `/pw time … [lock]`, `lock`/`unlock` | `/atlas set <world> time` = fixed time; `time-cycle` flag for the clock. The broken `lock` argument is gone; the clock no longer jumps back when players enter. | Kept, fixed |
-| 17 | `/pw weather … [lock]`, `lock`/`unlock` | `/atlas set <world> weather` plus the `weather` flag. Lock bug fixed. | Kept, fixed |
-| 18 | Portals (pos at feet, spawn target, 2.5 s cooldown) | Selector-based; spawn, exact location or other-server target; per-portal cooldown, sound, particle, restriction and fill blocks (D6, D12); chunk index lookup. | Extended |
-| 19 | Keep-loaded regions and wand | Same behaviour and limit; regions in MariaDB; the wand is the Closet item `atlas:selector` (D9). | Kept |
-| 20 | `/pw reload` | `/atlas reload` now also reloads messages. Config changes need a restart. | Kept, improved |
-| 21 | Help and tab completion by permission | Kept; one admin node. | Kept |
-| 22 | PixelChat messages | Campfire `messages.yml`, validated at startup and by tests. | Kept |
-| 23 | `PixelWorldsApi` and reflective `worldService()` | Typed `AtlasRules` service. The reflective world service (PixelArena) has no successor: runtime world creation is not possible on Veyra. | Changed (D1, D13) |
-| 24 | Hard-coded `spawn` world | Ordinary flags and settings staff set per world (D2). | Changed (D2) |
-| 25 | Hard-coded arena rules | Ordinary flags (`block-break`, `block-place`, `portals`) and the `void` generator (D2). | Changed (D2) |
-| 26 | Void worlds pin time/weather | Ordinary settings: `set time noon`, `weather` flag off, `time-skip` off (D2). | Changed (D2) |
+| PixelWorlds feature | Current Atlas behavior | Status |
+| --- | --- | --- |
+| Create/import/load/unload/delete worlds | Data-pack dimensions and queued start-time operations; no runtime create/unload. | Changed to Veyra-compatible restart lifecycle. |
+| Clone/reset | Startup-time copy with sealed evidence, checksums and retained originals; uncertain work remains disabled. | Preserved and made recoverable. |
+| Void generator | Flat no-layer dimension using the vanilla void biome. | Preserved with data-pack generation. |
+| Teleport/spawn/set spawn | Safe async teleport; world must already be loaded. Player or explicit console target/coordinates. | Preserved and adapted to Folia. |
+| World info/list | Loaded/enabled state, generator, settings, player count and flags. | Preserved; folder paths are not exposed. |
+| Original 20 world rules | Stored as per-world MariaDB flags, with configured defaults and overrides. | Preserved without hard-coded world-name exceptions. |
+| Plugin spawn rules | Separate hostile/friendly plugin-origin flags, while normal game spawns use the game flags. | Added to preserve the correct origin semantics. |
+| Trading | `trading` flag (default on) consumed by Handshake. | Added by owner decision. |
+| Difficulty, game mode, time, weather | Per-world settings; `atlas.gamemode.bypass`; time/weather cycles use their flags. | Preserved with old defects corrected. |
+| Portals | Selected cuboid, same-backend spawn/location or EU/NA cross-region target, cooldown, sound, particle, optional permission and ordinary-block fill. | Extended. |
+| Keep-loaded regions | Selected X/Z chunk rectangle with configured cap and plugin chunk tickets. | Preserved. |
+| Help and tab completion | `/atlas` help and sender-aware completions for supported argument positions. | Preserved and adapted. |
+| Messages | Authored Campfire catalog, stable message keys and selector name/lore. | Preserved; actual current authored rendering is English. |
+| Selector | Closet item `atlas:selector`; public Closet delivery and exact overflow handling. | Preserved and provider-owned. |
+| Public rules API | Typed `AtlasRules` and `AtlasFlag` service for world rules and spawn origin. | Replaces `PixelWorldsApi` and reflective `worldService()`. |
+| GUI, custom blocks and recipes | None. There was no legacy Atlas GUI to restore; selector interaction is in-game corner selection. | No GUI or custom item-production feature. |
 
-## Permissions
+The old `pixelworlds.*` permissions and aliases are not retained. Current permissions and approved allocations are listed in [permissions](permissions.md). Colosseum arena/reset design is no longer an Atlas completion gate; Atlas does not provide runtime world lifecycle calls.
 
-The 27 PixelWorlds nodes (`pixelworlds.*`, all `default: false`) are replaced by `atlas.admin`,
-`atlas.portal.use`, `atlas.gamemode.bypass` and runtime `atlas.portal.<name>` (D3, D10, D12).
+The current cross-region model supports the Postbox EU/NA pair only. It is not a general arbitrary-node implementation. The exact limitation is in [multiserver support](multiserver.md).
 
-## Storage
-
-`config.yml` world, portal and region sections → MariaDB tables per region (D7). No live data
-existed to import.
-
-## Known limits
-
-The 2026-10-05 full source/configuration and content/asset presentation comparison found no
-legacy GUI to restore. The command-only interfaces and vanilla selection tool are accounted
-for in [the presentation audit](presentation-audit.md); approved text and behavior remain intact.
-
-- Every world lifecycle change needs a server restart, done by the owner.
-- A world can only be cloned once its folder exists, so after it has been loaded once.
-- Cross-server portals need a Velocity route; VeyraTest01 currently has none.
-- Until Atlas has loaded its rules after a start, guarded gameplay and mob spawns are refused.
-
-## Selector delivery and overflow integration
-
-The only physical issuance is staff `/atlas selector`, action `atlas.selector`,
-one registered `atlas:selector`. Atlas registers its manifest asynchronously;
-Closet owns factory/preparation/serialization and final delivery. Atlas owns
-permissions, corner selection and item usage. There are no Atlas rewards,
-refunds, returns, menu icons or public physical-grant adapters. World drop flags
-are normal gameplay guards, not issuance.
-
-The 2026-10-07 integration replaces legacy all-or-nothing ClosetGrants with
-ClosetDeliveries.issue/reconcile and FreshDeliveryRequest(INVENTORY_FIRST).
-Closet freezes the first exact payload, proves the inventory/rest partition and
-stores only confirmed capacity remainder in Market. Atlas's shared
-atlas_selector_delivery caller journal preserves the original UUID across nodes,
-restarts, repeated commands, offline delivery and UNKNOWN/lost replies. Only a
-matching COMPLETE receipt with expectedUnits=1 settles the pointer; late completion
-cannot settle a newer ID. Pending join/startup recovery never reserves a new request.
-Confirmed mailbox delivery uses selector.overflow; pending text stays approved.
-
-Provider-owned frozen goods are never rematerialized from later templates. Atlas
-currently has no existing-stack redelivery path. Market owns overflow storage;
-Controller retains its transfer/payment/reward coordination. Shared release
-tracking remains in workspace PLUGIN_INTEGRATIONS.md. Compilation uses the public
-Closet delivery API, current Campfire and Veyra item-exchange artifacts; technical
-hashes and rollout dependencies are in [the release handoff](master-handoff-20261007.md).
-
-The source integration is complete. Runtime must have matching Closet delivery,
-Market and Veyra providers before game acceptance; compilation is not a claim
-that those server artifacts were installed. No direct drops, fire-and-forget
-fallbacks, compensating IDs, private APIs or legacy journal resets are introduced.
+Current statistics are listed in [Logbook integration](logbook-integration.md); they use original Atlas source transitions and preserve unknown outcomes. These measurements do not add player history/location tracking.

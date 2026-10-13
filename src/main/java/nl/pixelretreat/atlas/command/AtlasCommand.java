@@ -23,6 +23,7 @@ import nl.pixelretreat.atlas.service.RulesService;
 import nl.pixelretreat.atlas.service.SelectionService;
 import nl.pixelretreat.atlas.service.TeleportService;
 import nl.pixelretreat.atlas.service.WorldAdminService;
+import nl.pixelretreat.atlas.statistics.AtlasStatistics;
 import nl.pixelretreat.atlas.storage.AtlasRepository;
 import nl.pixelretreat.atlas.world.RulesSnapshot;
 import nl.pixelretreat.atlas.world.SpawnPoint;
@@ -63,7 +64,15 @@ public final class AtlasCommand implements TabExecutor {
     public record Services(AtlasConfig config, RulesService rules, WorldAdminService worlds,
                            TeleportService teleports, PortalService portals, KeepLoadedService keepLoaded,
                            SelectionService selections, Function<Player, CompletableFuture<nl.pixelretreat.atlas.service.SelectorDeliveryService.Result>> giveSelector,
-                           Supplier<CompletableFuture<Void>> reload) { }
+                           Supplier<CompletableFuture<Void>> reload, AtlasStatistics statistics) {
+        public Services(AtlasConfig config, RulesService rules, WorldAdminService worlds,
+                        TeleportService teleports, PortalService portals, KeepLoadedService keepLoaded,
+                        SelectionService selections,
+                        Function<Player, CompletableFuture<nl.pixelretreat.atlas.service.SelectorDeliveryService.Result>> giveSelector,
+                        Supplier<CompletableFuture<Void>> reload) {
+            this(config, rules, worlds, teleports, portals, keepLoaded, selections, giveSelector, reload, null);
+        }
+    }
 
     private final Plugin plugin;
     private final AtlasMessages messages;
@@ -77,7 +86,7 @@ public final class AtlasCommand implements TabExecutor {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!sender.hasPermission(ADMIN)) { messages.send(sender, "common.permission"); return true; }
+        if (!sender.isOp() && !sender.hasPermission(ADMIN)) { messages.send(sender, "common.permission"); return true; }
         Services ready = services;
         if (args.length == 0) { messages.send(sender, "help.lines"); return true; }
         String[] rest = Arrays.copyOfRange(args, 1, args.length);
@@ -114,12 +123,13 @@ public final class AtlasCommand implements TabExecutor {
                 if (generator.isEmpty()) { messages.send(sender, "world.unknown-generator"); return; }
                 var future = action.equals("create") ? s.worlds().create(key.get(), generator.get())
                         : s.worlds().importWorld(key.get(), generator.get());
-                report(sender, future, action.equals("create") ? "world.created" : "world.imported", key.get(), null);
+                report(sender, future, action.equals("create") ? "world.created" : "world.imported", key.get(), null,
+                        "world_" + action);
             }
             case "enable", "disable" -> {
                 if (args.length != 2) { messages.send(sender, "usage.world"); return; }
                 worldKey(sender, args[1]).ifPresent(key -> report(sender, s.worlds().setEnabled(key, action.equals("enable")),
-                        action.equals("enable") ? "world.enabled" : "world.disabled", key, null));
+                        action.equals("enable") ? "world.enabled" : "world.disabled", key, null, "world_" + action));
             }
             case "delete" -> {
                 if (args.length != 3 || !args[2].equalsIgnoreCase("confirm")) {
@@ -128,7 +138,7 @@ public final class AtlasCommand implements TabExecutor {
                     return;
                 }
                 worldKey(sender, args[1]).ifPresent(key ->
-                        report(sender, s.worlds().delete(key, actor(sender)), "world.delete-queued", key, null));
+                        report(sender, s.worlds().delete(key, actor(sender)), "world.delete-queued", key, null, "world_delete"));
             }
             case "clone" -> {
                 if (args.length != 3) { messages.send(sender, "usage.world"); return; }
@@ -136,7 +146,7 @@ public final class AtlasCommand implements TabExecutor {
                 Optional<String> target = source.isEmpty() ? Optional.empty() : newWorld(sender, args[2]);
                 if (source.isEmpty() || target.isEmpty()) return;
                 report(sender, s.worlds().cloneWorld(source.get(), target.get(), actor(sender)),
-                        "world.clone-queued", target.get(), source.get());
+                        "world.clone-queued", target.get(), source.get(), "world_clone");
             }
             case "reset" -> {
                 if (args.length < 3 || !args[args.length - 1].equalsIgnoreCase("confirm") || args.length > 4) {
@@ -151,7 +161,8 @@ public final class AtlasCommand implements TabExecutor {
                     source = worldKey(sender, args[2]);
                     if (source.isEmpty()) return;
                 }
-                report(sender, s.worlds().reset(key.get(), source, actor(sender)), "world.reset-queued", key.get(), null);
+                report(sender, s.worlds().reset(key.get(), source, actor(sender)), "world.reset-queued", key.get(), null,
+                        "world_reset");
             }
             case "pending" -> s.worlds().pending().whenComplete((operations, failure) -> {
                 if (failure != null) { messages.send(sender, "common.failed"); return; }
@@ -165,7 +176,10 @@ public final class AtlasCommand implements TabExecutor {
             });
             case "cancel" -> {
                 if (args.length != 2 || !args[1].matches("\\d{1,18}")) { messages.send(sender, "usage.world"); return; }
-                s.worlds().cancel(Long.parseLong(args[1])).whenComplete((result, failure) -> {
+                CompletableFuture<WorldAdminService.Result> future = s.worlds().cancel(Long.parseLong(args[1]));
+                observeAdmin(s, sender, "world_cancel", future,
+                        (result, failure) -> failure == null && result != null ? result.name().toLowerCase(Locale.ROOT) : "failed");
+                future.whenComplete((result, failure) -> {
                     if (failure != null) messages.send(sender, "common.failed");
                     else if (result == WorldAdminService.Result.DONE) messages.send(sender, "world.cancelled", Map.of("id", args[1]));
                     else messages.send(sender, "world.operation-not-found", Map.of("id", args[1]));
@@ -190,7 +204,10 @@ public final class AtlasCommand implements TabExecutor {
     }
 
     private void report(CommandSender sender, CompletableFuture<WorldAdminService.Result> future, String successKey,
-                        String world, String source) {
+                        String world, String source, String action) {
+        Services ready = services;
+        observeAdmin(ready, sender, action, future,
+                (result, failure) -> failure == null && result != null ? result.name().toLowerCase(Locale.ROOT) : "failed");
         future.whenComplete((result, failure) -> {
             if (failure != null) { messages.send(sender, "common.failed"); return; }
             Map<String, String> values = source == null ? Map.of("world", WorldNames.shortName(world))
@@ -262,22 +279,26 @@ public final class AtlasCommand implements TabExecutor {
             if (world.isEmpty()) return;
             try {
                 SpawnPoint point = point(args, 1);
-                s.rules().setSpawn(world.get(), point).whenComplete((done, failure) -> messages.reply(sender, failure,
+                CompletableFuture<Void> future = s.rules().setSpawn(world.get(), point);
+                observeAdmin(s, sender, "world_set_spawn", future, (done, failure) -> failure == null ? "completed" : "failed");
+                future.whenComplete((done, failure) -> messages.reply(sender, failure,
                     "spawn.set", Map.of("world", WorldNames.shortName(world.get()))));
             } catch (IllegalArgumentException invalid) { messages.send(sender, "usage.setspawn"); }
             return;
         }
-        if (!(sender instanceof Player)) { messages.send(sender, "usage.setspawn"); return; }
-        if (!(sender instanceof Player player)) { messages.send(sender, "common.players-only"); return; }
+        if (!(sender instanceof Player player)) { messages.send(sender, "usage.setspawn"); return; }
         if (args.length > 1) { messages.send(sender, "usage.setspawn"); return; }
         String here = RulesService.key(player.getWorld());
         Optional<String> key = args.length == 1 ? worldKey(sender, args[0]) : Optional.of(here);
         if (key.isEmpty()) return;
         if (!key.get().equals(here)) { messages.send(sender, "spawn.wrong-world"); return; }
         Location at = player.getLocation();
-        s.rules().setSpawn(here, new SpawnPoint(at.getX(), at.getY(), at.getZ(), at.getYaw(), at.getPitch()))
-                .whenComplete((done, failure) -> messages.reply(sender, failure, "spawn.set",
-                        Map.of("world", WorldNames.shortName(here))));
+        CompletableFuture<Void> future = s.rules().setSpawn(here,
+                new SpawnPoint(at.getX(), at.getY(), at.getZ(), at.getYaw(), at.getPitch()));
+        observeAdmin(s, sender, "world_set_spawn", future,
+                (done, failure) -> failure == null ? "completed" : "failed");
+        future.whenComplete((done, failure) -> messages.reply(sender, failure, "spawn.set",
+                Map.of("world", WorldNames.shortName(here))));
     }
 
     // ---- flags and settings -------------------------------------------------------------------
@@ -296,7 +317,10 @@ public final class AtlasCommand implements TabExecutor {
         Boolean value = raw.equals("default") ? null : raw.equals("on") || raw.equals("true");
         Map<String, String> values = Map.of("flag", flag.get().key(), "world", WorldNames.shortName(key.get()),
                 "value", value == null ? "default" : value ? "on" : "off");
-        s.rules().setFlag(key.get(), flag.get(), value).whenComplete((done, failure) ->
+        CompletableFuture<Void> future = s.rules().setFlag(key.get(), flag.get(), value);
+        observeAdmin(s, sender, "world_flag", future,
+                (done, failure) -> failure == null ? "completed" : "failed");
+        future.whenComplete((done, failure) ->
                 messages.reply(sender, failure, "flag.set", values));
     }
 
@@ -345,7 +369,10 @@ public final class AtlasCommand implements TabExecutor {
         }
         Map<String, String> values = Map.of("setting", args[1].toLowerCase(Locale.ROOT),
                 "world", WorldNames.shortName(key.get()), "value", value == null ? "none" : raw);
-        s.rules().setSetting(key.get(), setting, value).whenComplete((done, failure) ->
+        CompletableFuture<Void> future = s.rules().setSetting(key.get(), setting, value);
+        observeAdmin(s, sender, "world_setting", future,
+                (done, failure) -> failure == null ? "completed" : "failed");
+        future.whenComplete((done, failure) ->
                 messages.reply(sender, failure, "setting.set", values));
     }
 
@@ -408,14 +435,22 @@ public final class AtlasCommand implements TabExecutor {
                     Portal portal = new Portal(name, bounds.world(), bounds.minX(), bounds.minY(), bounds.minZ(),
                             bounds.maxX(), bounds.maxY(), bounds.maxZ(), PortalTarget.spawn(target.get()),
                             s.config().defaultCooldownMillis(), Optional.empty(), Optional.empty(), false, Optional.empty());
-                    s.portals().create(portal).whenComplete((created, failure) -> messages.reply(sender, failure,
+                    CompletableFuture<Boolean> future = s.portals().create(portal);
+                    observeAdmin(s, sender, "portal_create", future,
+                            (created, failure) -> failure != null ? "failed" : Boolean.TRUE.equals(created) ? "created" : "already_exists");
+                    future.whenComplete((created, failure) -> messages.reply(sender, failure,
                             Boolean.TRUE.equals(created) ? "portal.created" : "portal.exists",
                             Boolean.TRUE.equals(created) ? Map.of("portal", name, "world", WorldNames.shortName(target.get()))
                                     : named));
                 });
             }
-            case "delete" -> s.portals().delete(name).whenComplete((deleted, failure) -> messages.reply(sender, failure,
-                    Boolean.TRUE.equals(deleted) ? "portal.deleted" : "portal.not-found", named));
+            case "delete" -> {
+                CompletableFuture<Boolean> future = s.portals().delete(name);
+                observeAdmin(s, sender, "portal_delete", future,
+                        (deleted, failure) -> failure != null ? "failed" : Boolean.TRUE.equals(deleted) ? "deleted" : "not_found");
+                future.whenComplete((deleted, failure) -> messages.reply(sender, failure,
+                        Boolean.TRUE.equals(deleted) ? "portal.deleted" : "portal.not-found", named));
+            }
             case "info" -> {
                 Optional<Portal> found = s.portals().index().named(name);
                 if (found.isEmpty()) { messages.send(sender, "portal.not-found", named); return; }
@@ -433,7 +468,7 @@ public final class AtlasCommand implements TabExecutor {
                     return;
                 }
                 int millis = Integer.parseInt(args[2]);
-                update(sender, s, name, portal -> portal.withCooldown(millis), "portal.cooldown-set",
+                update(sender, s, name, portal -> portal.withCooldown(millis), "portal.cooldown-set", "portal_cooldown",
                         Map.of("portal", name, "millis", args[2]));
             }
             case "sound" -> {
@@ -444,7 +479,7 @@ public final class AtlasCommand implements TabExecutor {
                     messages.send(sender, "portal.invalid-sound");
                     return;
                 }
-                update(sender, s, name, portal -> portal.withSound(sound), "portal.sound-set",
+                update(sender, s, name, portal -> portal.withSound(sound), "portal.sound-set", "portal_sound",
                         Map.of("portal", name, "sound", sound.orElse("none")));
             }
             case "particle" -> {
@@ -461,7 +496,7 @@ public final class AtlasCommand implements TabExecutor {
                     }
                 }
                 Optional<String> chosen = particle;
-                update(sender, s, name, portal -> portal.withParticle(chosen), "portal.particle-set",
+                update(sender, s, name, portal -> portal.withParticle(chosen), "portal.particle-set", "portal_particle",
                         Map.of("portal", name, "particle", chosen.orElse("none")));
             }
             case "restrict" -> {
@@ -470,7 +505,7 @@ public final class AtlasCommand implements TabExecutor {
                     return;
                 }
                 boolean restricted = args[2].equalsIgnoreCase("on");
-                update(sender, s, name, portal -> portal.withRestricted(restricted), "portal.restrict-set",
+                update(sender, s, name, portal -> portal.withRestricted(restricted), "portal.restrict-set", "portal_restrict",
                         Map.of("portal", name, "value", restricted ? "on" : "off", "permission", "atlas.portal." + name));
             }
             case "fill" -> {
@@ -485,12 +520,16 @@ public final class AtlasCommand implements TabExecutor {
                     block = Optional.of(material.name());
                 }
                 Optional<Portal> found = s.portals().index().named(name);
-                if (found.isPresent() && block.isPresent() && found.get().volume() > s.config().maxFillBlocks()) {
-                    messages.send(sender, "portal.fill-too-large", Map.of("max", Integer.toString(s.config().maxFillBlocks())));
-                    return;
+                if (found.isPresent() && block.isPresent()) {
+                    try {
+                        if (found.get().volume() > s.config().maxFillBlocks()) throw new ArithmeticException("Fill budget");
+                    } catch (ArithmeticException tooLarge) {
+                        messages.send(sender, "portal.fill-too-large", Map.of("max", Integer.toString(s.config().maxFillBlocks())));
+                        return;
+                    }
                 }
                 Optional<String> chosen = block;
-                update(sender, s, name, portal -> portal.withFill(chosen), "portal.fill-set",
+                update(sender, s, name, portal -> portal.withFill(chosen), "portal.fill-set", "portal_fill",
                         Map.of("portal", name, "block", chosen.map(b -> b.toLowerCase(Locale.ROOT)).orElse("none")));
             }
             default -> messages.send(sender, "usage.portal");
@@ -525,7 +564,8 @@ public final class AtlasCommand implements TabExecutor {
                     float pitch = args.length == 8 ? Float.parseFloat(args[7]) : 0f;
                     point = Optional.of(new SpawnPoint(Double.parseDouble(args[3]), Double.parseDouble(args[4]),
                             Double.parseDouble(args[5]), yaw, pitch));
-                } catch (NumberFormatException invalid) {
+                    requireFinite(point.get());
+                } catch (IllegalArgumentException invalid) {
                     messages.send(sender, "usage.portal");
                     return;
                 }
@@ -536,13 +576,16 @@ public final class AtlasCommand implements TabExecutor {
             return;
         }
         PortalTarget chosen = target;
-        update(sender, s, name, portal -> portal.withTarget(chosen), "portal.target-set",
+        update(sender, s, name, portal -> portal.withTarget(chosen), "portal.target-set", "portal_target",
                 Map.of("portal", name, "target", messages.destination(chosen)));
     }
 
     private void update(CommandSender sender, Services s, String name, java.util.function.UnaryOperator<Portal> change,
-                        String successKey, Map<String, String> values) {
-        s.portals().update(name, change).whenComplete((updated, failure) -> {
+                        String successKey, String action, Map<String, String> values) {
+        CompletableFuture<Optional<Portal>> future = s.portals().update(name, change);
+        observeAdmin(s, sender, action, future,
+                (updated, failure) -> failure != null ? "failed" : updated == null || updated.isEmpty() ? "not_found" : "updated");
+        future.whenComplete((updated, failure) -> {
             if (failure != null) messages.send(sender, "common.failed");
             else if (updated.isEmpty()) messages.send(sender, "portal.not-found", Map.of("portal", name));
             else messages.send(sender, successKey, values);
@@ -582,7 +625,10 @@ public final class AtlasCommand implements TabExecutor {
                                 "max", Integer.toString(s.config().maxChunksPerRegion())));
                         return;
                     }
-                    s.keepLoaded().save(region).whenComplete((done, failure) -> messages.reply(sender,
+                    CompletableFuture<Void> future = s.keepLoaded().save(region);
+                    observeAdmin(s, sender, "keep_loaded_set", future,
+                            (done, failure) -> failure == null ? "completed" : "failed");
+                    future.whenComplete((done, failure) -> messages.reply(sender,
                             failure, "keeploaded.saved", Map.of("region", name,
                                     "world", WorldNames.shortName(region.world()), "chunks", Long.toString(region.chunkCount()))));
                 });
@@ -590,9 +636,11 @@ public final class AtlasCommand implements TabExecutor {
             case "delete" -> {
                 if (args.length != 2) { messages.send(sender, "usage.keeploaded"); return; }
                 String name = args[1].toLowerCase(Locale.ROOT);
-                s.keepLoaded().delete(name).whenComplete((deleted, failure) -> messages.reply(sender, failure,
-                        Boolean.TRUE.equals(deleted) ? "keeploaded.deleted" : "keeploaded.not-found",
-                        Map.of("region", name)));
+                CompletableFuture<Boolean> future = s.keepLoaded().delete(name);
+                observeAdmin(s, sender, "keep_loaded_delete", future,
+                        (deleted, failure) -> failure != null ? "failed" : Boolean.TRUE.equals(deleted) ? "deleted" : "not_found");
+                future.whenComplete((deleted, failure) -> messages.reply(sender, failure,
+                        Boolean.TRUE.equals(deleted) ? "keeploaded.deleted" : "keeploaded.not-found", Map.of("region", name)));
             }
             default -> messages.send(sender, "usage.keeploaded");
         }
@@ -603,9 +651,13 @@ public final class AtlasCommand implements TabExecutor {
     private static SpawnPoint point(String[] args, int start) {
         var point = new SpawnPoint(Double.parseDouble(args[start]), Double.parseDouble(args[start + 1]),
             Double.parseDouble(args[start + 2]), Float.parseFloat(args[start + 3]), Float.parseFloat(args[start + 4]));
+        requireFinite(point);
+        return point;
+    }
+
+    private static void requireFinite(SpawnPoint point) {
         if (!Double.isFinite(point.x()) || !Double.isFinite(point.y()) || !Double.isFinite(point.z())
                 || !Float.isFinite(point.yaw()) || !Float.isFinite(point.pitch())) throw new IllegalArgumentException("Non-finite point");
-        return point;
     }
 
     private Optional<SelectionService.Bounds> explicitBounds(CommandSender sender, String[] args, int start) {
@@ -632,6 +684,15 @@ public final class AtlasCommand implements TabExecutor {
         return Optional.of(WorldNames.NAMESPACE + ":" + name);
     }
 
+    private <T> void observeAdmin(Services s, CommandSender sender, String action, CompletableFuture<T> future,
+                                 java.util.function.BiFunction<T, Throwable, String> outcome) {
+        AtlasStatistics statistics = s.statistics();
+        if (statistics == null) return;
+        UUID actor = sender instanceof Player player ? player.getUniqueId() : null;
+        statistics.observeAdmin(actor, action, "accepted");
+        future.whenComplete((value, failure) -> statistics.observeAdmin(actor, action, outcome.apply(value, failure)));
+    }
+
     private World loaded(String key) {
         NamespacedKey namespaced = NamespacedKey.fromString(key);
         return namespaced == null ? null : plugin.getServer().getWorld(namespaced);
@@ -646,7 +707,7 @@ public final class AtlasCommand implements TabExecutor {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         Services ready = services;
-        if (!sender.hasPermission(ADMIN) || args.length == 0) return List.of();
+        if ((!sender.isOp() && !sender.hasPermission(ADMIN)) || args.length == 0) return List.of();
         List<String> worlds = worldNames(ready);
         String first = args[0].toLowerCase(Locale.ROOT);
         List<String> options = switch (args.length) {
@@ -692,16 +753,26 @@ public final class AtlasCommand implements TabExecutor {
                     case "create" -> worlds;
                     case "target" -> List.of("spawn", "here", "location", "server");
                     case "restrict" -> List.of("on", "off");
-                    case "sound", "particle", "fill" -> List.of("none");
+                    case "sound" -> withNone(org.bukkit.Registry.SOUNDS.stream()
+                            .map(sound -> org.bukkit.Registry.SOUNDS.getKey(sound).toString()).toList());
+                    case "particle" -> withNone(Arrays.stream(Particle.values())
+                            .filter(particle -> particle.getDataType() == Void.class).map(Enum::name).toList());
+                    case "fill" -> withNone(Arrays.stream(Material.values())
+                            .filter(material -> material.isBlock() && !material.isAir())
+                            .map(material -> material.name().toLowerCase(Locale.ROOT)).toList());
                     default -> List.of();
                 };
+                case "keeploaded" -> args[1].equalsIgnoreCase("set") ? worlds : List.of();
                 default -> List.of();
             };
             case 5 -> first.equals("world") && args[1].equalsIgnoreCase("reset") ? List.of("confirm")
+                    : first.equals("portal") && args[1].equalsIgnoreCase("create") ? worlds
                     : first.equals("portal") && args[1].equalsIgnoreCase("target")
                     ? (args[3].equalsIgnoreCase("spawn") || args[3].equalsIgnoreCase("location") ? worlds
                     : args[3].equalsIgnoreCase("server") ? List.of(ready.config().otherRegion()) : List.of())
                     : List.of();
+            case 6 -> first.equals("portal") && args[1].equalsIgnoreCase("target")
+                    && args[3].equalsIgnoreCase("server") && args[4].equalsIgnoreCase(ready.config().otherRegion()) ? worlds : List.of();
             default -> List.of();
         };
         String typed = args[args.length - 1].toLowerCase(Locale.ROOT);
@@ -711,6 +782,12 @@ public final class AtlasCommand implements TabExecutor {
     private static List<String> withConfirm(List<String> worlds) {
         List<String> options = new ArrayList<>(worlds);
         options.add("confirm");
+        return options;
+    }
+
+    private static List<String> withNone(List<String> values) {
+        List<String> options = new ArrayList<>(values);
+        options.add("none");
         return options;
     }
 

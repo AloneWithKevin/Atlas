@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
+import nl.pixelretreat.atlas.statistics.AtlasStatistics;
 import nl.pixelretreat.atlas.api.AtlasFlag;
 import nl.pixelretreat.atlas.keeploaded.KeepLoadedRegion;
 import nl.pixelretreat.atlas.portal.Portal;
@@ -39,10 +40,45 @@ import org.bukkit.GameMode;
 public final class AtlasRepository {
     private final DataSource database;
     private final String server;
+    private volatile AtlasStatistics statistics;
 
     public AtlasRepository(DataSource database, String server) {
         this.database = database;
         this.server = server;
+    }
+
+    /** Statistics become writable only after the real Postbox node has been verified. */
+    public void statistics(AtlasStatistics statistics) { this.statistics = statistics; }
+
+    private void lockStatistics(Connection connection) throws SQLException {
+        AtlasStatistics current = statistics;
+        if (current != null) current.lockSource(connection);
+    }
+
+    /** onLoad finishes folder work before Postbox exists; recover only original, stored terminal proofs. */
+    public void reconcileWorldStatistics() throws SQLException {
+        AtlasStatistics current = statistics;
+        if (current == null) return;
+        try (Connection connection = database.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                lockStatistics(connection);
+                try (PreparedStatement query = connection.prepareStatement(
+                        "SELECT p.id, p.state, c.phase FROM atlas_pending_operation p "
+                        + "JOIN atlas_logbook_world_operations o ON o.source_id = p.id "
+                        + "LEFT JOIN atlas_world_copy c ON c.operation_id = p.id AND c.server = p.server "
+                        + "WHERE p.server = ? AND p.finished_at IS NOT NULL AND p.state IN ('DONE','FAILED') "
+                        + "AND o.terminal_at IS NULL AND o.unresolved = FALSE")) {
+                    query.setString(1, server);
+                    try (ResultSet rows = query.executeQuery()) {
+                        while (rows.next()) current.finishWorldOperation(connection, rows.getLong(1),
+                                rows.getString(2).equals("DONE") ? "done"
+                                        : "UNCERTAIN".equals(rows.getString(3)) ? "unresolved" : "failed");
+                    }
+                }
+                connection.commit();
+            } catch (SQLException | RuntimeException failure) { connection.rollback(); throw failure; }
+        }
     }
 
     /** Creates the tables this plugin uses. */
@@ -321,7 +357,16 @@ public final class AtlasRepository {
     /** Queues folder work for the next start and returns its id. */
     public long queue(PendingOperation.Kind kind, String world, Optional<String> source, UUID requestedBy) throws SQLException {
         try (Connection connection = database.getConnection()) {
-            return queue(connection, kind, world, source, requestedBy);
+            connection.setAutoCommit(false);
+            try {
+                lockStatistics(connection);
+                long id = queue(connection, kind, world, source, requestedBy);
+                connection.commit();
+                return id;
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
+            }
         }
     }
 
@@ -338,7 +383,10 @@ public final class AtlasRepository {
             insert.executeUpdate();
             try (ResultSet keys = insert.getGeneratedKeys()) {
                 if (!keys.next()) throw new SQLException("No id for queued Atlas operation");
-                return keys.getLong(1);
+                long id = keys.getLong(1);
+                AtlasStatistics current = statistics;
+                if (current != null) current.startWorldOperation(connection, id, kind, world, source.orElse(null), requestedBy);
+                return id;
             }
         }
     }
@@ -349,6 +397,7 @@ public final class AtlasRepository {
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
+                lockStatistics(connection);
                 requireCopyUnlocked(connection, world);
                 if (!insertWorld(connection, world, generator, Optional.of(source), false)) {
                     connection.rollback();
@@ -370,6 +419,7 @@ public final class AtlasRepository {
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
+                lockStatistics(connection);
                 lockWorld(connection, world);
                 requireCopyUnlocked(connection, world);
                 requireNoPendingDelete(connection, world);
@@ -401,6 +451,7 @@ public final class AtlasRepository {
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
+                lockStatistics(connection);
                 boolean wasEnabled;
                 try (PreparedStatement query = connection.prepareStatement(
                         "SELECT enabled, generator FROM atlas_world WHERE server = ? AND world = ? FOR UPDATE")) {
@@ -485,7 +536,16 @@ public final class AtlasRepository {
     /** Records the outcome of a pending operation. Only a pending row can change. */
     public boolean finish(long id, boolean success, String result) throws SQLException {
         try (Connection connection = database.getConnection()) {
-            return finish(connection, id, success, result);
+            connection.setAutoCommit(false);
+            try {
+                lockStatistics(connection);
+                boolean completed = finish(connection, id, success, result);
+                connection.commit();
+                return completed;
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
+            }
         }
     }
 
@@ -497,7 +557,16 @@ public final class AtlasRepository {
             update.setString(2, result.length() > 255 ? result.substring(0, 255) : result);
             update.setLong(3, id);
             update.setString(4, server);
-            return update.executeUpdate() == 1;
+            boolean changed = update.executeUpdate() == 1;
+            AtlasStatistics current = statistics;
+            if (changed && current != null) {
+                String outcome = success ? "done" : "failed";
+                Optional<WorldCopyState> copy = copyState(connection, id, false);
+                if (!success && copy.map(state -> state.phase() == WorldCopyState.Phase.UNCERTAIN).orElse(false))
+                    outcome = "unresolved";
+                current.finishWorldOperation(connection, id, outcome);
+            }
+            return changed;
         }
     }
 
@@ -506,6 +575,7 @@ public final class AtlasRepository {
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
+                lockStatistics(connection);
                 PendingOperation operation;
                 try (PreparedStatement query = connection.prepareStatement(
                         "SELECT * FROM atlas_pending_operation WHERE id = ? AND server = ? AND state = 'PENDING' FOR UPDATE")) {
@@ -547,6 +617,8 @@ public final class AtlasRepository {
                     update.setString(2, server);
                     if (update.executeUpdate() != 1) throw new SQLException("Operation changed while cancelling");
                 }
+                AtlasStatistics current = statistics;
+                if (current != null) current.finishWorldOperation(connection, id, "cancelled");
                 connection.commit();
                 return Optional.of(operation);
             } catch (SQLException | RuntimeException failure) {
@@ -652,6 +724,7 @@ public final class AtlasRepository {
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
+                lockStatistics(connection);
                 WorldCopyState state = copyState(connection, operation.id(), true).orElseThrow(
                         () -> new SQLException("Copy evidence missing"));
                 if (state.phase() != WorldCopyState.Phase.PUBLISHED) throw new SQLException("Copy not published");
@@ -678,6 +751,7 @@ public final class AtlasRepository {
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
+                lockStatistics(connection);
                 if (!setEnabled(connection, operation.world(), false)) throw new SQLException("Uncertain target row missing");
                 try (PreparedStatement update = connection.prepareStatement(
                         "UPDATE atlas_world_copy SET phase = 'UNCERTAIN' WHERE server = ? AND operation_id = ? "
@@ -768,11 +842,25 @@ public final class AtlasRepository {
 
     /** Inserts a new portal or replaces an existing one with the same name. */
     public void savePortal(Portal portal) throws SQLException {
+        writePortal(portal, false);
+    }
+
+    /** Creation cannot overwrite an existing portal, including simultaneous same-name requests. */
+    public boolean insertPortal(Portal portal) throws SQLException {
+        try { writePortal(portal, true); return true; }
+        catch (SQLException failure) {
+            if (failure.getErrorCode() == 1062) return false;
+            throw failure;
+        }
+    }
+
+    private void writePortal(Portal portal, boolean insertOnly) throws SQLException {
         try (Connection connection = database.getConnection(); PreparedStatement upsert = connection.prepareStatement("""
                 REPLACE INTO atlas_portal (server, name, world, min_x, min_y, min_z, max_x, max_y, max_z,
                   target_kind, target_region, target_world, target_x, target_y, target_z, target_yaw, target_pitch,
                   cooldown_ms, sound, particle, restricted, fill_block)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""")) {
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                .replace("REPLACE INTO", insertOnly ? "INSERT INTO" : "REPLACE INTO"))) {
             upsert.setString(1, server);
             upsert.setString(2, portal.name());
             upsert.setString(3, portal.world());
@@ -869,28 +957,122 @@ public final class AtlasRepository {
 
     /** Records a trip to another region before the player is sent there. */
     public void issueTicket(TravelTicket ticket, String targetRegion, Instant expiresAt) throws SQLException {
-        try (Connection connection = database.getConnection(); PreparedStatement insert = connection.prepareStatement("""
-                INSERT INTO atlas_travel_ticket (id, player, origin_region, target_region, portal, target_world,
-                  target_x, target_y, target_z, target_yaw, target_pitch, expires_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""")) {
-            insert.setString(1, ticket.id().toString());
-            insert.setString(2, ticket.player().toString());
-            insert.setString(3, server);
-            insert.setString(4, targetRegion);
-            insert.setString(5, ticket.portal());
-            insert.setString(6, ticket.world());
-            setPoint(insert, 7, ticket.point());
-            insert.setTimestamp(12, Timestamp.from(expiresAt));
-            insert.executeUpdate();
+        issueTicket(ticket, targetRegion, expiresAt, "");
+    }
+
+    /** Records the ticket and its original Logbook root in the same source transaction. */
+    public void issueTicket(TravelTicket ticket, String targetRegion, Instant expiresAt, String sourceWorld) throws SQLException {
+        try (Connection connection = database.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                lockStatistics(connection);
+                try (PreparedStatement insert = connection.prepareStatement("""
+                        INSERT INTO atlas_travel_ticket (id, player, origin_region, target_region, portal, target_world,
+                          target_x, target_y, target_z, target_yaw, target_pitch, expires_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""")) {
+                    insert.setString(1, ticket.id().toString());
+                    insert.setString(2, ticket.player().toString());
+                    insert.setString(3, server);
+                    insert.setString(4, targetRegion);
+                    insert.setString(5, ticket.portal());
+                    insert.setString(6, ticket.world());
+                    setPoint(insert, 7, ticket.point());
+                    insert.setTimestamp(12, Timestamp.from(expiresAt));
+                    insert.executeUpdate();
+                }
+                AtlasStatistics current = statistics;
+                if (current != null) current.startPortalTrip(connection, ticket.id(), ticket.player(), ticket.portal(),
+                        sourceWorld, targetRegion, ticket.world());
+                connection.commit();
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
+            }
         }
     }
 
-    /** Marks a ticket as unused because the player could not be sent; returns whether it changed. */
-    public boolean withdrawTicket(UUID id) throws SQLException {
-        try (Connection connection = database.getConnection(); PreparedStatement delete = connection.prepareStatement(
-                "DELETE FROM atlas_travel_ticket WHERE id = ? AND consumed_at IS NULL")) {
-            delete.setString(1, id.toString());
-            return delete.executeUpdate() == 1;
+    /** Creates a durable original root before a local teleport can touch PlayerState. */
+    public void startLocalPortalTrip(UUID operation, UUID player, String portal, String sourceWorld,
+                                     String targetWorld) throws SQLException {
+        try (Connection connection = database.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                lockStatistics(connection);
+                AtlasStatistics current = statistics;
+                if (current == null) throw new SQLException("Atlas statistics are not ready");
+                current.startPortalTrip(connection, operation, player, portal, sourceWorld, server, targetWorld);
+                connection.commit();
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
+            }
+        }
+    }
+
+    /** Finishes only a known current portal outcome; an absent original root remains unimported. */
+    public void finishPortalTrip(UUID operation, String outcome) throws SQLException {
+        try (Connection connection = database.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                lockStatistics(connection);
+                AtlasStatistics current = statistics;
+                if (current != null) current.finishPortalTrip(connection, operation, outcome);
+                connection.commit();
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
+            }
+        }
+    }
+
+    /** Keeps terminal/duration holds when the external teleport outcome cannot be proven. */
+    public void unresolvedPortalTrip(UUID operation, String cause) throws SQLException {
+        try (Connection connection = database.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                lockStatistics(connection);
+                AtlasStatistics current = statistics;
+                if (current != null) current.unresolvedPortalTrip(connection, operation, cause);
+                connection.commit();
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
+            }
+        }
+    }
+
+    /** Returns whether an unconsumed ticket remained available or was withdrawn. */
+    public boolean withdrawTicket(UUID id) throws SQLException { return withdrawTicket(id, false); }
+
+    /** A known pre-send rejection removes the ticket; an ambiguous send preserves it and records a gap. */
+    public boolean withdrawTicket(UUID id, boolean provenNotSent) throws SQLException {
+        try (Connection connection = database.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                lockStatistics(connection);
+                AtlasStatistics current = statistics;
+                boolean pending;
+                if (provenNotSent) {
+                    try (PreparedStatement delete = connection.prepareStatement(
+                            "DELETE FROM atlas_travel_ticket WHERE id = ? AND consumed_at IS NULL")) {
+                        delete.setString(1, id.toString());
+                        pending = delete.executeUpdate() == 1;
+                    }
+                    if (pending && current != null) current.finishPortalTrip(connection, id, "not_performed");
+                } else {
+                    try (PreparedStatement query = connection.prepareStatement(
+                            "SELECT id FROM atlas_travel_ticket WHERE id = ? AND consumed_at IS NULL FOR UPDATE")) {
+                        query.setString(1, id.toString());
+                        try (ResultSet row = query.executeQuery()) { pending = row.next(); }
+                    }
+                    if (pending && current != null) current.unresolvedPortalTrip(connection, id, "proxy_send_unconfirmed");
+                }
+                connection.commit();
+                return pending;
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
+            }
         }
     }
 
@@ -900,25 +1082,49 @@ public final class AtlasRepository {
      */
     public Optional<TravelTicket> takeTicket(UUID player) throws SQLException {
         try (Connection connection = database.getConnection()) {
-            TravelTicket ticket;
-            try (PreparedStatement query = connection.prepareStatement("""
-                    SELECT * FROM atlas_travel_ticket WHERE player = ? AND target_region = ? AND consumed_at IS NULL
-                      AND expires_at > CURRENT_TIMESTAMP(3) ORDER BY created_at DESC LIMIT 1""")) {
-                query.setString(1, player.toString());
-                query.setString(2, server);
-                try (ResultSet rows = query.executeQuery()) {
-                    if (!rows.next()) return Optional.empty();
-                    Optional<SpawnPoint> point = rows.getObject("target_x") == null ? Optional.empty()
-                            : Optional.of(new SpawnPoint(rows.getDouble("target_x"), rows.getDouble("target_y"),
-                            rows.getDouble("target_z"), rows.getFloat("target_yaw"), rows.getFloat("target_pitch")));
-                    ticket = new TravelTicket(UUID.fromString(rows.getString("id")), player,
-                            rows.getString("portal"), rows.getString("target_world"), point);
+            connection.setAutoCommit(false);
+            try {
+                lockStatistics(connection);
+                TravelTicket ticket;
+                Timestamp selectedCreatedAt;
+                try (PreparedStatement query = connection.prepareStatement("""
+                        SELECT * FROM atlas_travel_ticket WHERE player = ? AND target_region = ? AND consumed_at IS NULL
+                          AND expires_at > CURRENT_TIMESTAMP(3) ORDER BY created_at DESC LIMIT 1""")) {
+                    query.setString(1, player.toString());
+                    query.setString(2, server);
+                    try (ResultSet rows = query.executeQuery()) {
+                        if (!rows.next()) { connection.rollback(); return Optional.empty(); }
+                        Optional<SpawnPoint> point = rows.getObject("target_x") == null ? Optional.empty()
+                                : Optional.of(new SpawnPoint(rows.getDouble("target_x"), rows.getDouble("target_y"),
+                                rows.getDouble("target_z"), rows.getFloat("target_yaw"), rows.getFloat("target_pitch")));
+                        selectedCreatedAt = rows.getTimestamp("created_at");
+                        ticket = new TravelTicket(UUID.fromString(rows.getString("id")), player,
+                                rows.getString("portal"), rows.getString("target_world"), point);
+                    }
                 }
-            }
-            try (PreparedStatement consume = connection.prepareStatement(
-                    "UPDATE atlas_travel_ticket SET consumed_at = CURRENT_TIMESTAMP(3) WHERE id = ? AND consumed_at IS NULL")) {
-                consume.setString(1, ticket.id().toString());
-                return consume.executeUpdate() == 1 ? Optional.of(ticket) : Optional.empty();
+                try (PreparedStatement consume = connection.prepareStatement(
+                        "UPDATE atlas_travel_ticket SET consumed_at = CURRENT_TIMESTAMP(3) WHERE id = ? AND consumed_at IS NULL")) {
+                    consume.setString(1, ticket.id().toString());
+                    if (consume.executeUpdate() != 1) { connection.rollback(); return Optional.empty(); }
+                }
+                AtlasStatistics current = statistics;
+                if (current != null) current.portalTicketConsumed(connection, ticket.id(), ticket.player());
+                try (PreparedStatement expireSuperseded = connection.prepareStatement("""
+                        UPDATE atlas_travel_ticket SET expires_at = CURRENT_TIMESTAMP(3)
+                        WHERE player = ? AND target_region = ? AND consumed_at IS NULL AND id <> ?
+                          AND created_at <= ?
+                        """)) {
+                    expireSuperseded.setString(1, ticket.player().toString());
+                    expireSuperseded.setString(2, server);
+                    expireSuperseded.setString(3, ticket.id().toString());
+                    expireSuperseded.setTimestamp(4, selectedCreatedAt);
+                    expireSuperseded.executeUpdate();
+                }
+                connection.commit();
+                return Optional.of(ticket);
+            } catch (SQLException | RuntimeException failure) {
+                connection.rollback();
+                throw failure;
             }
         }
     }

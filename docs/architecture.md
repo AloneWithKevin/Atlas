@@ -1,101 +1,51 @@
 # Architecture
 
-## Selector issuance
+## World lifecycle
 
-`SelectorDeliveryService` persists the original operation ID in
-`atlas_selector_delivery`, keyed by player across nodes. Only explicit staff
-requests reserve new intents; startup/join recovery looks up pending intents.
-Concurrent local calls share the current future. MariaDB reservation retains the
-pending ID; only a verified COMPLETE Closet receipt marks that exact ID completed.
-The next explicit command can then reserve a new intent. Provider failures, unknown
-results and offline delivery retain the pointer; no replacement goods or IDs are
-created to compensate. Closet's durable journal owns the frozen payload, inventory
-partition, Market receipt and recovery. Atlas never materializes or drops the selector.
-All caller journal access runs on AtlasWorkers. Delivery callbacks only use immutable
-IDs/receipts; player messages use Campfire's public delivery service. A failed caller
-completion write does not invalidate proven delivery; the retained pointer safely
-reconciles the same COMPLETE provider receipt later.
+Atlas does not call Bukkit `createWorld` or `unloadWorld`. Veyra loads dimensions from the world registry before plugins are enabled. Atlas writes its generated data pack from database state and handles queued folder operations in `onLoad`, before those worlds load. New/imported/enabled worlds become available after a server start. Clone/reset operations prepare and verify folder copies at startup and activate the published world on a later startup. Uncertain files remain preserved and the affected target remains disabled. See [world recovery](world-recovery.md).
 
-## World lifecycle without createWorld
+## Server identity and storage
 
-Veyra rejects Bukkit `createWorld`/`unloadWorld` (Folia), and the owner decided on 2026-10-01 not
-to add a runtime lifecycle API to Veyra. Veyra does load every dimension in the `LEVEL_STEM`
-registry at startup (`PaperWorldLoader.loadInitialWorlds`), including data pack dimensions, as
-world key `<namespace>:<path>` stored in `<level>/dimensions/<namespace>/<path>`. Minecraft reads
-data packs in `Main` before plugins load. Atlas therefore:
+Postbox publishes `PostboxBootstrapIdentity` during `onLoad` from the exact validated `server` configuration value `EU` or `NA`. This is a bootstrap configuration fact, not evidence that Postbox's database, presence or routing service is ready; those start in `onEnable`. Atlas has `load: POSTWORLD` and depends on Postbox. Its `onLoad` compares the bootstrap identity with Atlas's configured region before resolving world folders, opening Hikari, initializing schema, running queued world operations or synchronizing the datapack. Missing or mismatched identity fails Atlas closed. Atlas retains its later live `VeyraCluster` region check as a separate runtime readiness check.
 
-1. writes `<level>/datapacks/atlas` from MariaDB immediately when staff change the world set; the
-   pack is picked up automatically at the next start;
-2. queues folder work (delete, clone, reset) in `atlas_pending_operation`;
-3. runs folder work only when the target is absent from startup declarations.
-   Clones/resets prepare verified copies during one start and declare the completed
-   world for the following start; uncertain content stays disabled;
-4. re-synchronises the data pack in `onLoad` and warns once if it was out of date.
+MariaDB is the shared `pixelretreat_veyra` database; Atlas rows are partitioned by the validated local region. Each backend reads and mutates its own world, portal and keep-loaded records. Cross-region portal travel writes a one-use ticket for the target region; the destination consumes it conditionally. The current identity and peer contract accepts only the EU/NA pair and does not prove readiness for an additional node. See [multiserver support](multiserver.md).
 
-Void worlds are a flat generator without layers in `minecraft:the_void`; no plugin chunk generator
-or `bukkit.yml` entry is involved. Custom dimensions use the vanilla dimension types; Paper's
-`time.affects-all-worlds: false` (as on VeyraTest01) gives every world its own clock.
+## Stored data
 
-## Data (MariaDB, `pixelretreat_veyra`)
+Atlas stores world settings, flag overrides, portals, keep-loaded regions, pending lifecycle work, sealed copy evidence, travel tickets, selector-delivery pointers, and Logbook source journals in MariaDB. World files and generated datapack files remain under the server's normal world folder. Database credentials stay in the installed local `plugins/Atlas/config.yml`; repository defaults are blank and diagnostics redact credentials.
 
-Every table has a `server` column (`EU`/`NA`); each server reads and writes only its own rows,
-except travel tickets, which the origin writes for the destination.
+## Work ownership
 
-| Table | Content |
+| Work | Execution owner |
 | --- | --- |
-| `atlas_world` | One row per Atlas world and per vanilla dimension with settings: generator (NULL for vanilla), enabled, reset source, spawn, difficulty, game mode, fixed time, weather. |
-| `atlas_world_flag` | Flag overrides. |
-| `atlas_portal` | Bounds, destination (spawn, location or other region), cooldown, sound, particle, restriction, fill block. |
-| `atlas_keep_loaded_region` | Chunk rectangles. |
-| `atlas_pending_operation` | Queued folder work and its outcome. |
-| `atlas_world_copy` | Durable phase, activation state and sealed counts. |
-| `atlas_world_copy_entry` | Prepared/original paths, sizes and checksum evidence. |
-| `atlas_travel_ticket` | Cross-server trips; consumed once with a conditional update, expire after `portals.travel-ticket-minutes`, purged a day after expiry. |
+| Database access, generated data-pack writes, snapshots and bounded non-world computation | Atlas's bounded worker pool; rejected when its queue is full. |
+| Clone/reset/delete folder work | Bounded startup workers in `onLoad`, before worlds load. Copy recovery verifies durable sealed path/hash evidence. |
+| Rule checks | The event's owning thread, reading an immutable `RulesSnapshot`. |
+| World rules, game rules, time, weather, difficulty, world spawn and chunk-ticket reconciliation | Folia global region scheduler. |
+| Player game mode, message delivery, portal connection messages, teleport and portal effects | That player's entity scheduler. Teleports use `teleportAsync`. |
+| Safe-landing search and portal fill edits | The owning region scheduler after the target chunk is available. |
+| Logbook measurement writes | Source transaction or bounded Atlas worker, as described in [the measurement contract](logbook-integration.md). |
 
-No old data existed (no PixelWorlds installation or extra dimension on any instance), so nothing
-is imported.
+No game thread waits on a database, file or future. Asynchronous results return to the entity or region that owns the next operation. `onDisable` stops capture, releases plugin-owned chunk tickets, settles and stops worker jobs, and closes the database pool. Accepted work may already have committed; shutdown cancellation is not a database rollback.
 
-## Threads
+## Rules and portal indexing
 
-See [world recovery](world-recovery.md) for atomic queue/cancellation, two starts,
-bounded copy workers and retained original trees.
+Each world has an immutable rules/settings record. Database changes are serialized through the rules service before new snapshots are published, so an older read cannot overwrite a later accepted change. Portal lookup uses compact per-world cuboid entries and checks the actual block against portal bounds; it does not allocate an entry per chunk covered by an administrator-defined portal.
 
-| Work | Where |
-| --- | --- |
-| Folder copy/delete for queued operations | `onLoad`, before worlds load; files copied in parallel on a bounded pool of `workers.threads`. |
-| Database, data pack writes | `AtlasWorkers`: fixed pool of `workers.threads`, bounded queue; a full queue rejects the request (`common.failed`). Hikari pool ≤ 4 connections. |
-| Rule checks in listeners | The event's own thread, reading an immutable `RulesSnapshot` from an `AtomicReference`; no locks. |
-| Game rules, time, weather, difficulty, world spawn, chunk tickets, permission registration | Global region scheduler. |
-| Game modes, teleports, messages to a player, Connect plugin message, portal effects | The player's entity scheduler (`teleportAsync` only). |
-| Safe-spot search and portal fill blocks | The region scheduler of the chunk (after `getChunkAtAsync`); the search only inspects loaded chunks owned by that region. |
-| Ticket purge | Async scheduler every 60 minutes, submitted to the workers. |
+Portal edits serialize their database and index updates. Portal create is insert-only, so a concurrent duplicate cannot replace the existing record. Portal fill work is clipped to the current world height and uses the owning region. Destructive world deletion rechecks portal and keep-loaded references immediately before removing the folder.
 
-Results return to the owning thread through the schedulers; no game thread waits on a future.
-`onDisable` releases all chunk tickets, stops the workers and closes the pool.
+At startup, guarded natural weather and thunder changes are refused until an immutable rules snapshot is available. Atlas-caused weather changes remain allowed. A `NIGHT_SKIP` is also refused until rules are ready; other time-skip reasons retain their existing behavior. `WorldRulesListenerTest` covers these startup paths.
 
-Region rectangle expansion runs on the bounded workers. Reload completes after the
-global scheduler reconciles Atlas tickets, or reports a scheduling/ticket failure.
-Revision checks discard older database reads. Ticket bookkeeping and terminal
-cleanup share a lock; delayed callbacks cannot re-add tickets after shutdown.
-Cleanup settles pending reconciliation results even when ticket removal throws.
-Closed region services refuse new saves/deletions. Work accepted before shutdown
-may already have committed; cancellation is not a database rollback.
-Worker shutdown settles jobs removed from the queue and interrupts active jobs.
-An active job's future completes when its call actually returns or throws.
-Ticket registration does not guarantee the chunk is already physically loaded.
+## Cross-region portal flow
 
-Until the rules are loaded, guarded gameplay (block changes, damage, drops, spawns) is refused,
-and `/atlas` is not yet registered. If startup fails, Atlas logs one line and disables itself.
+The origin validates the player and route, reserves a ticket in the original portal transaction, and sends Velocity's `Connect` message on the player's entity scheduler. Failed send removes the unused ticket. On arrival, the target EU/NA backend claims the ticket once and schedules the teleport for the player. Atlas keeps `UNKNOWN` distinct from proven arrival or refusal. A supported Velocity route and a running target are required for actual game acceptance.
 
-## Cross-server portals
+## Campfire and Closet
 
-The origin inserts a ticket (target region, world, optional point), then sends the player a
-BungeeCord `Connect` to `server.proxy-names.<region>` on the entity thread. A failed send deletes
-the unused ticket. On join the destination consumes the newest valid ticket once and teleports.
-Testing needs a Velocity route between both servers.
+Atlas registers its authored catalog with Campfire before delivering messages, and uses Campfire's public delivery API. The verified current route renders the authored Atlas strings in English even after a locale change; Atlas does not claim translated Atlas prose.
 
-## Vanilla portals inside Atlas portals
+Atlas registers `atlas:selector` and the selector lore glyph through Closet's public asset-registration contract. The definitions stay with Atlas. Closet owns and supplies every pack asset; Atlas does not own a texture, font, model or sound file.
 
-`EntityPortalEnterEvent`, `PlayerPortalEvent` and `EntityPortalEvent` are cancelled inside an
-Atlas portal, and `BlockPhysicsEvent` is cancelled for an Atlas portal's own fill block, so a
-nether portal fill without obsidian frame does not break.
+## Logbook
+
+Atlas exposes only the seven owner-approved metric groups through the Logbook provider contract. Durable facts use their original Atlas operation and transaction. The source enforces bounded collection and admission. The matching provider is build/test-only under this task; the dependent Atlas artifact is not eligible for deployment until matching provider deployment is authorized. Exact metric semantics and coverage are in [Logbook integration](logbook-integration.md).

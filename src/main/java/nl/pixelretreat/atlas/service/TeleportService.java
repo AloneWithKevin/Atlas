@@ -19,6 +19,8 @@ import org.bukkit.plugin.Plugin;
  * spot near the vanilla spawn. The safe-spot search runs on the region that owns the spawn chunk.
  */
 public final class TeleportService {
+    /** A failed async provider stage is ambiguous, so it must never be relabelled as a proven refusal. */
+    public enum Outcome { ARRIVED, NOT_PERFORMED, UNKNOWN }
     private final Plugin plugin;
     private final RulesService rules;
     private final AtlasConfig config;
@@ -31,22 +33,33 @@ public final class TeleportService {
 
     /** Completes with {@code true} when the player arrived in the world. Callable from any thread. */
     public CompletableFuture<Boolean> teleport(Player player, World world, Optional<SpawnPoint> point) {
-        CompletableFuture<Boolean> result = new CompletableFuture<>();
+        return teleportDetailed(player, world, point).thenApply(outcome -> outcome == Outcome.ARRIVED);
+    }
+
+    /** Retains the provider's uncertain result for source metrics while the legacy API stays boolean. */
+    public CompletableFuture<Outcome> teleportDetailed(Player player, World world, Optional<SpawnPoint> point) {
+        return teleportDetailed(player, world, point, () -> true);
+    }
+
+    /** Rechecks the original caller's admission on the entity owner immediately before teleport. */
+    public CompletableFuture<Outcome> teleportDetailed(Player player, World world, Optional<SpawnPoint> point,
+                                                        java.util.function.BooleanSupplier admission) {
+        CompletableFuture<Outcome> result = new CompletableFuture<>();
         Optional<SpawnPoint> exact = point.isPresent() ? point : storedSpawn(world);
         if (exact.isPresent()) {
             SpawnPoint spawn = exact.get();
-            move(player, new Location(world, spawn.x(), spawn.y(), spawn.z(), spawn.yaw(), spawn.pitch()), result);
+            move(player, new Location(world, spawn.x(), spawn.y(), spawn.z(), spawn.yaw(), spawn.pitch()), result, admission);
             return result;
         }
         Location spawn = world.getSpawnLocation();
         int chunkX = spawn.getBlockX() >> 4;
         int chunkZ = spawn.getBlockZ() >> 4;
         world.getChunkAtAsync(chunkX, chunkZ).whenComplete((chunk, failure) -> {
-            if (failure != null) { result.complete(false); return; }
+            if (failure != null) { result.complete(Outcome.NOT_PERFORMED); return; }
             plugin.getServer().getRegionScheduler().run(plugin, world, chunkX, chunkZ, task -> {
                 Location safe = safeSpot(world, spawn, config.safeSearchRadius());
-                if (safe == null) { result.complete(false); return; }
-                move(player, safe, result);
+                if (safe == null) { result.complete(Outcome.NOT_PERFORMED); return; }
+                move(player, safe, result, admission);
             });
         });
         return result;
@@ -57,15 +70,19 @@ public final class TeleportService {
         return snapshot == null ? Optional.empty() : snapshot.worldOrBuiltIn(RulesService.key(world)).spawn();
     }
 
-    private void move(Player player, Location destination, CompletableFuture<Boolean> result) {
+    private void move(Player player, Location destination, CompletableFuture<Outcome> result,
+                      java.util.function.BooleanSupplier admission) {
         boolean scheduled = player.getScheduler().run(plugin, task -> {
-            if (!player.isOnline()) { result.complete(false); return; }
+            if (!player.isOnline() || !admission.getAsBoolean()) { result.complete(Outcome.NOT_PERFORMED); return; }
             if (player.isInsideVehicle()) player.leaveVehicle();
             if (!player.getPassengers().isEmpty()) player.eject();
-            player.teleportAsync(destination, PlayerTeleportEvent.TeleportCause.PLUGIN)
-                    .whenComplete((success, error) -> result.complete(error == null && Boolean.TRUE.equals(success)));
-        }, () -> result.complete(false)) != null;
-        if (!scheduled) result.complete(false);
+            try {
+                player.teleportAsync(destination, PlayerTeleportEvent.TeleportCause.PLUGIN)
+                        .whenComplete((success, error) -> result.complete(error != null ? Outcome.UNKNOWN
+                                : Boolean.TRUE.equals(success) ? Outcome.ARRIVED : Outcome.NOT_PERFORMED));
+            } catch (RuntimeException uncertain) { result.complete(Outcome.UNKNOWN); }
+        }, () -> result.complete(Outcome.NOT_PERFORMED)) != null;
+        if (!scheduled) result.complete(Outcome.NOT_PERFORMED);
     }
 
     /**

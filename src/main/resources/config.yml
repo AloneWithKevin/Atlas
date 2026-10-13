@@ -60,3 +60,7 @@ default-flags:
 workers:
   threads: 4
   queue-size: 256
+# Owner-approved source admission limits; pending facts and future terminal holds share this bound.
+logbook:
+  maximum-pending: 100000
+  maximum-fact-bytes: 32768

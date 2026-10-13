@@ -1,95 +1,75 @@
-# Commands
+# Commands and tab completion
 
-Every command is `/atlas …` and requires `atlas.admin`. World arguments accept `overworld`,
-`the_nether` (or `nether`), `the_end` (or `end`) and the name of an Atlas world (`arena` or
-`atlas:arena`). New world names use 1–48 lowercase letters, numbers, `_` or `-`.
+All management commands use `/atlas` and require `atlas.admin`; OP is explicitly admitted. Players normally use portals directly. The Atlas Selector is issued only by staff through `/atlas selector`; its plain-text overflow recovery message tells the recipient to run `/overflow` when inventory space is available. It has no clickable command action.
 
-## Worlds
+World names contain 1–48 lowercase letters, numbers, underscores or hyphens. World arguments accept the vanilla names `overworld`, `nether`/`the_nether` and `end`/`the_end`, or an Atlas world name/key. Commands run on the local backend; teleport targets are online players on that backend unless the command explicitly describes a cross-region portal destination.
 
-World changes are written to MariaDB and the Atlas data pack at once, but Minecraft only loads
-dimensions at startup. Create/import and enable/disable take effect at the **next server start**. Clone/reset use a preparation start followed by an activation start; an already disabled reset stays disabled. See [world recovery](world-recovery.md).
+## World management
 
-| Command | What it does |
+| Command | Result |
 | --- | --- |
-| `/atlas world list` | Every world with its generator and state: loaded, loads at next start, disabled but still loaded, or disabled. |
-| `/atlas world create <name> <generator>` | Declares a new world with fresh terrain. Generators: `normal`, `flat`, `void`, `nether`, `end`. Refused if the folder already exists. |
-| `/atlas world import <name> <generator>` | Declares a world whose folder staff placed in `<level>/dimensions/atlas/<name>`. The generator is used for chunks that do not exist yet. |
-| `/atlas world enable <world>` / `disable <world>` | Declares or undeclares an Atlas world from the next start. Disabling is refused while portals or keep-loaded regions are in the world. Players inside a removed world are moved to the overworld spawn by Minecraft. |
-| `/atlas world delete <world> confirm` | Disables the world now and deletes its folder at the next start. Refused for vanilla dimensions and while portals or keep-loaded regions remain. |
-| `/atlas world clone <source> <name>` | Declares a new world as a copy of `source` (any world whose folder exists, including the vanilla ones). The folder is copied at the next start, while nothing is loaded, so the copy is consistent. The new world remembers `source` as its reset source. It stays undeclared while preparing and loads at the following start. |
-| `/atlas world reset <world> [source] confirm` | Replaces an Atlas world with a fresh copy of `source` (default: its reset source) at the next start. The old folder is retained separately; publication requires complete checksum evidence. The target loads at the following start. Refused while keep-loaded regions are in the world. |
-| `/atlas world pending` | Lists queued delete, clone and reset operations. |
-| `/atlas world cancel <id>` | Cancels a queued operation and undoes what it declared (a cancelled clone removes the new world, a cancelled delete re-enables the world, a cancelled reset restores its prior enabled state). Clone/reset cancellation is refused once preparation starts. |
+| `/atlas world list` | Lists worlds and their loaded/enabled state and generator. |
+| `/atlas world create <name> <generator>` | Declares a new dimension using `normal`, `flat`, `void`, `nether` or `end`; it loads after the next start. Existing folders are refused. |
+| `/atlas world import <name> <generator>` | Declares an existing folder under `<level>/dimensions/atlas/<name>`; the generator applies to new chunks. |
+| `/atlas world enable <world>` / `disable <world>` | Changes whether an Atlas dimension is declared for the next start. Disable is refused while portals or keep-loaded regions refer to the world. |
+| `/atlas world delete <world> confirm` | Queues folder deletion for startup. Vanilla worlds and worlds with portal/region references are refused; references are checked again immediately before removal. |
+| `/atlas world clone <source> <name>` | Prepares a verified copy on the next start, then activates it on a later start. The source may be any world with a folder. |
+| `/atlas world reset <world> [source] confirm` | Prepares and verifies a replacement; the original is retained. The existing reset source is used when omitted. |
+| `/atlas world pending` | Shows queued operations. It is not a history of terminal receipts. |
+| `/atlas world cancel <id>` | Cancels an operation only while its stored phase permits cancellation, restoring the prior declaration as applicable. |
 
-## Information and teleports
+New/imported/enabled/disabled worlds are applied after a server start. Clone/reset may require separate preparation and activation starts. A proven sealed copy may resume after interruption; changed or incomplete evidence remains uncertain and is not overwritten or discarded. See [world recovery](world-recovery.md).
 
-| Command | What it does |
+## Information and travel
+
+| Command | Result |
 | --- | --- |
-| `/atlas info <world>` | Loaded/enabled state, generator, player count, settings and all flags (`*` marks an override). |
-| `/atlas tp <world> [player]` | Teleports you or an online player to the world's stored spawn, or to a safe spot near its vanilla spawn. The world must be loaded. |
-| `/atlas spawn [world] [player]` | Same as `tp`; without a world it uses the target's current world. |
-| `/atlas setspawn [world]` | Stores your position (including direction) as the spawn of the world you stand in. |
+| `/atlas info <world>` | Shows loaded/enabled state, generator, player count, settings and effective flags; `*` marks an override. |
+| `/atlas tp <world> [player]` | Teleports the sender or named online local player to the stored spawn or a safe nearby spot. The destination world must be loaded. |
+| `/atlas spawn [world] [player]` | Uses the given world or the selected player's/current sender's world. |
+| `/atlas setspawn [world]` | A player stores their current position/direction in the current world (or the matching explicit world). |
+| `/atlas setspawn <world> <x> <y> <z> <yaw> <pitch>` | Console form with an explicit world and complete position. |
 
 ## Rules
 
-| Command | What it does |
+| Command | Result |
 | --- | --- |
-| `/atlas flag <world> <flag> <on\|off\|default>` | Overrides a flag in one world; `default` removes the override. Works for vanilla dimensions too. |
-| `/atlas set <world> difficulty <peaceful\|easy\|normal\|hard\|default>` | Fixed difficulty, or leave vanilla's. |
-| `/atlas set <world> gamemode <survival\|creative\|adventure\|spectator\|none>` | Forced game mode for everyone without `atlas.gamemode.bypass`, applied on join, on entering the world and when changed. |
-| `/atlas set <world> time <day\|noon\|night\|midnight\|0-23999\|unlock>` | Fixed time of day: the clock stops at this time and sleeping cannot skip it. `unlock` lets time run again. Not available in nether-type worlds, which have no clock. |
-| `/atlas set <world> weather <clear\|rain\|thunder\|none>` | Puts the world in this weather. With the `weather` flag off it stays like that; otherwise it changes naturally afterwards. |
+| `/atlas flag <world> <flag> <on\|off\|default>` | Sets or clears one of the 25 per-world flags. `default` removes the override. |
+| `/atlas set <world> difficulty <peaceful\|easy\|normal\|hard\|default>` | Sets the difficulty or restores the server default. |
+| `/atlas set <world> gamemode <survival\|creative\|adventure\|spectator\|none>` | Applies a forced game mode; `none` clears it. `atlas.gamemode.bypass` preserves a player's current mode. |
+| `/atlas set <world> time <day\|noon\|night\|midnight\|0–23999\|unlock>` | Sets a fixed clock value or unlocks the time cycle. Not available in nether-type dimensions. |
+| `/atlas set <world> weather <clear\|rain\|thunder\|none>` | Applies weather; `none` clears Atlas's explicit weather setting. The `weather` flag controls natural changes. |
 
-Flags: `hostile-mobs`, `friendly-mobs`, `plugin-hostile-mobs`, `plugin-friendly-mobs`, `tnt-damage`,
-`crystal-damage`, `fire-damage`, `explosion-damage`, `pvp`, `fall-damage`, `hunger`, `drowning`,
-`block-break`, `block-place`, `leaf-decay`, `crop-trampling`, `item-drop`, `item-pickup`, `weather`,
-`time-cycle`, `time-skip`, `mob-griefing`, `keep-inventory`, `portals`, `trading`. See
-[configuration](configuration.md#flags) for what each one controls.
-
-Trading is controlled per world with the same command, for example `/atlas flag arena trading off`
-(refuses player trades in `arena`), `/atlas flag arena trading on` (allows them there even when
-`default-flags.trading` is off) and `/atlas flag arena trading default` (removes the override so
-`arena` follows the configured default).
+Flags: `hostile-mobs`, `friendly-mobs`, `plugin-hostile-mobs`, `plugin-friendly-mobs`, `tnt-damage`, `crystal-damage`, `fire-damage`, `explosion-damage`, `pvp`, `fall-damage`, `hunger`, `drowning`, `block-break`, `block-place`, `leaf-decay`, `crop-trampling`, `item-drop`, `item-pickup`, `weather`, `time-cycle`, `time-skip`, `mob-griefing`, `keep-inventory`, `portals`, `trading`. Definitions are in [configuration](configuration.md#world-flags).
 
 ## Selector, portals and keep-loaded regions
 
-`/atlas selector` delivers the Atlas Selector (a Closet item). Left-click a block for corner 1,
-right-click a block for corner 2. It never breaks blocks. Selections are forgotten when you quit.
-Delivery tries inventory first; the exact confirmed capacity remainder goes to Market.
-When the selector is stored there, the message directs you to `/overflow`.
-An unresolved delivery retains its original request ID across restarts and nodes;
-repeating the selector command resumes that request. Joining also resumes an existing
-request without creating another one. A completed request permits a new selector request.
+An authorized staff member runs `/atlas selector [online-local-player]`. In game, left-click a block for corner 1 and right-click a block for corner 2. The selection is local to that player and is cleared on quit. The tool does not break blocks. Closet delivers one exact selector; Atlas does not create a replacement when delivery is unresolved.
 
-| Command | What it does |
+| Command | Result |
 | --- | --- |
-| `/atlas portal create <name> <world>` | Creates a portal from your selection that leads to the spawn of `<world>`. |
-| `/atlas portal target <name> spawn <world>` | Destination: the spawn of a world on this server. |
-| `/atlas portal target <name> here` | Destination: your exact current position and direction. |
-| `/atlas portal target <name> server <region> <world> [x y z [yaw pitch]]` | Destination on the other server (EU or NA), at a position or that world's spawn. |
-| `/atlas portal cooldown <name> <millis>` | Time before the same player can use any portal again (default 2500, max 600000). |
-| `/atlas portal sound <name> <namespaced-key\|none>` | Sound played to the traveller, for example `minecraft:block.portal.travel`. |
-| `/atlas portal particle <name> <PARTICLE\|none>` | Particle shown to the traveller; only particles without extra data. |
-| `/atlas portal restrict <name> <on\|off>` | When on, the portal also requires `atlas.portal.<name>`. |
-| `/atlas portal fill <name> <block\|none>` | Fills the portal with a block (for example `nether_portal` or `end_gateway`) without block physics; `none` removes it. Limited to `portals.max-fill-blocks`. |
-| `/atlas portal list` / `info <name>` / `delete <name>` | List, inspect or delete portals. Deleting removes the fill blocks. |
-| `/atlas keeploaded set <name>` | Keeps the chunks under your selection loaded (X/Z only; at most `keep-loaded.max-chunks-per-region`). |
-| `/atlas keeploaded delete <name>` / `list` | Delete a region, or list regions with the active chunk ticket count. |
+| `/atlas portal create <name> <world>` | Uses the player's two-corner selection and initially targets the world's spawn. |
+| `/atlas portal create <name> <target-world> <source-world> <x1> <y1> <z1> <x2> <y2> <z2>` | Console form with explicit source world and ordered bounds. |
+| `/atlas portal target <name> spawn <world>` | Sets a same-backend world-spawn target. |
+| `/atlas portal target <name> here` | Uses the player's current position and direction. |
+| `/atlas portal target <name> location <world> <x> <y> <z> <yaw> <pitch>` | Sets an explicit same-backend destination; all coordinates are required in console. |
+| `/atlas portal target <name> server <EU\|NA> <world> [x y z [yaw pitch]]` | Sets a cross-region destination at its spawn or a specified position. The configured proxy name and active route must match. |
+| `/atlas portal cooldown <name> <millis>` | Sets the per-player portal cooldown (0–600000 ms; new portals use the configured default). |
+| `/atlas portal sound <name> <namespaced-key\|none>` | Sets a registered sound or clears it. |
+| `/atlas portal particle <name> <PARTICLE\|none>` | Sets a particle that requires no extra data or clears it. |
+| `/atlas portal restrict <name> <on\|off>` | Toggles the additional per-portal `atlas.portal.<name>` permission. |
+| `/atlas portal fill <name> <block\|none>` | Fills/removes the portal volume with a placeable block, within the configured volume cap. |
+| `/atlas portal list`, `/atlas portal info <name>`, `/atlas portal delete <name>` | Lists, inspects or deletes portal records; deletion also removes its fill. |
+| `/atlas keeploaded set <name>` | Uses a player's selection; only X/Z matter. |
+| `/atlas keeploaded set <name> <world> <x1> <y1> <z1> <x2> <y2> <z2>` | Console form with explicit world and corners. |
+| `/atlas keeploaded delete <name>` / `/atlas keeploaded list` | Deletes or lists local keep-loaded regions and active ticket counts. |
+| `/atlas reload` | Reloads authored messages and rebuilds the world, portal, region and rules snapshots. Configuration changes need restart. |
+| `/atlas help` | Shows the registered command help. |
 
-`/atlas reload` reloads `messages.yml` through Campfire and re-reads worlds, portals and regions
-from the database. `config.yml` changes need a restart.
+## Completion and input rules
 
-## Console administration — 11 October 2026
+Completion follows the current command position and sender access. It suggests current world names, portal/region names, valid generators, flag/setting values, supported regions, registry-backed sound/material names and particles without extra data. Console variants include their required explicit world and coordinate arguments. Once a remote region value is invalid, completion does not suggest destination worlds for it. Coordinates and new names remain free input; Atlas validates them when executing the command.
 
-All `/atlas` actions require `atlas.admin`. Console input is explicit:
+Non-finite coordinates, reversed bounds, coordinate overflow, and portal volumes that overflow or exceed the configured cap are refused. A remote destination must name the other current EU/NA region. Permission is checked when the command executes and, for player movement, again at the entity-owned callback.
 
-- `atlas setspawn <world> <x> <y> <z> <yaw> <pitch>`
-- `atlas selector <online-local-player>`
-- `atlas portal create <name> <target-world> <source-world> <x1> <y1> <z1> <x2> <y2> <z2>`
-- `atlas portal target <name> location <world> <x> <y> <z> <yaw> <pitch>`
-- `atlas keeploaded set <name> <world> <x1> <y1> <z1> <x2> <y2> <z2>`
-
-Bounds are ordered; invalid/non-finite coordinates and overflowing volumes are
-refused. Keep-loaded still uses the existing maximum chunk count. GUI selection
-forms remain available in game. Existing teleport forms require their explicit
-online local target in console. No implicit world, position or direction is added.
+There is no Atlas inventory GUI. The in-game selector is a two-corner tool, not a menu.

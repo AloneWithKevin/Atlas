@@ -1,3 +1,19 @@
+# Verification history
+
+## Current final audit
+
+The authoritative exact verification record for the current integrated Atlas and matching Logbook sources is [Ferry/Eindrapporten/Atlas.md](../../Ferry/Eindrapporten/Atlas.md). It records the final Java 25 build commands, exact test counts, isolated MariaDB/PHP coverage, per-repository source and artifact status, remaining limitations, current queue state and owner acceptance conditions. The final run passed 215 Java tests with 0 skips, failures or errors. Only the Postbox bootstrap-identity JAR is queued; the Logbook statistics provider and dependent Atlas JAR are not deployed or queued. Do not copy an earlier version's count or hash as proof for the current source.
+
+The 13 October final audit used a private loopback MariaDB instance in an isolated data directory. The test fixture recorded `productionAccessed: false` and `stopped: true`. No production database or running game server was used for mutating tests.
+
+## Historical results
+
+The dated 0.1.0–0.1.9 sections below are retained as historical verification for those exact source/artifact versions. Their artifact hashes, test counts, dependencies and deployment statements do not describe the 13 October integrated source. Keep these records intact; append future version-specific evidence rather than rewriting them.
+
+## Owner acceptance
+
+Builds, unit tests, MariaDB tests, source review, public API tests and pack validation are not in-game acceptance. Ferry owns server restarts and the checklist in the external final report. The Logbook statistics provider/consumer and dependent Atlas JAR remain unqueued and undeployed. Separately, only the Postbox bootstrap-identity provider JAR is queued at VeyraTestNA01/plugins/update/Postbox.jar; the installed Postbox remains unchanged until Ferry's next restart.
+
 # Verification
 
 ## 2026-10-07, selector delivery integration

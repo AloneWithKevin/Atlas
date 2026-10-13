@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
 import nl.pixelretreat.atlas.config.AtlasConfig;
@@ -20,6 +21,7 @@ import nl.pixelretreat.atlas.portal.PortalIndex;
 import nl.pixelretreat.atlas.portal.PortalTarget;
 import nl.pixelretreat.atlas.portal.TravelTicket;
 import nl.pixelretreat.atlas.storage.AtlasRepository;
+import nl.pixelretreat.atlas.statistics.AtlasStatistics;
 import nl.pixelretreat.atlas.message.AtlasMessages;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -40,7 +42,7 @@ import org.bukkit.plugin.Plugin;
  */
 public final class PortalService {
     /** Outcome of a player walking into a portal, mapped to a message by the listener. */
-    public enum Travel { ARRIVED, SWITCHING, FAILED, TARGET_MISSING }
+    public enum Travel { ARRIVED, SWITCHING, FAILED, TARGET_MISSING, INVALID_TARGET }
 
     private final Plugin plugin;
     private final AtlasRepository repository;
@@ -50,6 +52,9 @@ public final class PortalService {
     private final AtlasMessages messages;
     private final AtomicReference<PortalIndex> index = new AtomicReference<>(PortalIndex.EMPTY);
     private final Map<UUID, Long> cooldowns = new ConcurrentHashMap<>();
+    private final AtomicBoolean invalidTargetWarned = new AtomicBoolean();
+    private final Object mutationLock = new Object();
+    private volatile AtlasStatistics statistics;
 
     public PortalService(Plugin plugin, AtlasRepository repository, AtlasWorkers workers, AtlasConfig config,
                          TeleportService teleports, AtlasMessages messages) {
@@ -63,12 +68,30 @@ public final class PortalService {
 
     /** The current portal index. */
     public PortalIndex index() { return index.get(); }
+    public void statistics(AtlasStatistics statistics) { this.statistics = statistics; }
+
+    /** Best-effort measurement of the real portal trigger/refusal on the player's entity thread. */
+    public void recordAttempt(UUID player, String portal, String outcome, String reason) {
+        AtlasStatistics current = statistics;
+        if (current != null) current.observePortalAttempt(player, portal, outcome, reason);
+    }
+
+    public void onPlayerScheduler(Player player, java.util.function.Consumer<Player> action) {
+        player.getScheduler().run(plugin, task -> action.accept(player), null);
+    }
 
     /** Loads every portal and registers the permissions of restricted portals. */
     public CompletableFuture<Void> reload() {
-        return workers.submit(repository::loadPortals).thenAccept(portals -> {
-            index.set(new PortalIndex(portals));
-            plugin.getServer().getGlobalRegionScheduler().run(plugin, task -> {
+        return workers.submit(() -> {
+            synchronized (mutationLock) { reloadNow(); }
+            return null;
+        });
+    }
+
+    private void reloadNow() throws java.sql.SQLException {
+        List<Portal> portals = repository.loadPortals();
+        index.set(new PortalIndex(portals));
+        plugin.getServer().getGlobalRegionScheduler().run(plugin, task -> {
                 var manager = plugin.getServer().getPluginManager();
                 for (Portal portal : portals) {
                     if (portal.restricted() && manager.getPermission(portal.permission()) == null) {
@@ -76,41 +99,50 @@ public final class PortalService {
                                 "Use the restricted Atlas portal " + portal.name(), PermissionDefault.OP));
                     }
                 }
-            });
         });
     }
 
     /** Stores a new portal; completes with false when the name is taken. */
     public CompletableFuture<Boolean> create(Portal portal) {
-        if (index().named(portal.name()).isPresent()) return CompletableFuture.completedFuture(false);
-        return workers.submit(() -> { repository.savePortal(portal); return null; })
-                .thenCompose(ignored -> reload()).thenApply(ignored -> true);
+        return workers.submit(() -> {
+            synchronized (mutationLock) {
+                boolean created = repository.insertPortal(portal);
+                reloadNow();
+                return created;
+            }
+        });
     }
 
     /** Changes a portal; completes with the new value, or empty when it does not exist. */
     public CompletableFuture<Optional<Portal>> update(String name, UnaryOperator<Portal> change) {
-        Optional<Portal> old = index().named(name);
-        if (old.isEmpty()) return CompletableFuture.completedFuture(Optional.empty());
-        Portal updated = change.apply(old.get());
-        return workers.submit(() -> { repository.savePortal(updated); return null; })
-                .thenCompose(ignored -> reload())
-                .thenApply(ignored -> {
-                    if (!old.get().fillBlock().equals(updated.fillBlock())) {
-                        old.get().fillBlock().ifPresent(block -> fill(old.get(), Material.AIR, Material.matchMaterial(block)));
-                        updated.fillBlock().ifPresent(block -> fill(updated, Material.matchMaterial(block), null));
-                    }
-                    return Optional.of(updated);
-                });
+        return workers.submit(() -> {
+            synchronized (mutationLock) {
+                Optional<Portal> old = index().named(name);
+                if (old.isEmpty()) return Optional.<Portal>empty();
+                Portal updated = change.apply(old.get());
+                repository.savePortal(updated);
+                reloadNow();
+                if (!old.get().fillBlock().equals(updated.fillBlock())) {
+                    old.get().fillBlock().ifPresent(block -> fill(old.get(), Material.AIR, Material.matchMaterial(block)));
+                    updated.fillBlock().ifPresent(block -> fill(updated, Material.matchMaterial(block), null));
+                }
+                return Optional.of(updated);
+            }
+        });
     }
 
     /** Deletes a portal and removes its fill blocks; completes with whether it existed. */
     public CompletableFuture<Boolean> delete(String name) {
-        Optional<Portal> old = index().named(name);
-        if (old.isEmpty()) return CompletableFuture.completedFuture(false);
-        return workers.submit(() -> repository.deletePortal(name)).thenCompose(deleted -> reload().thenApply(ignored -> {
-            if (deleted) old.get().fillBlock().ifPresent(block -> fill(old.get(), Material.AIR, Material.matchMaterial(block)));
-            return deleted;
-        }));
+        return workers.submit(() -> {
+            synchronized (mutationLock) {
+                Optional<Portal> old = index().named(name);
+                if (old.isEmpty()) return false;
+                boolean deleted = repository.deletePortal(name);
+                reloadNow();
+                if (deleted) old.get().fillBlock().ifPresent(block -> fill(old.get(), Material.AIR, Material.matchMaterial(block)));
+                return deleted;
+            }
+        });
     }
 
     /**
@@ -133,10 +165,11 @@ public final class PortalService {
                 int cx = chunkX, cz = chunkZ;
                 world.getChunkAtAsync(cx, cz).thenRun(() -> plugin.getServer().getRegionScheduler()
                         .run(plugin, world, cx, cz, task -> {
-                            for (int x = fromX; x <= toX; x++)
-                                for (int y = portal.minY(); y <= portal.maxY(); y++)
-                                    for (int z = fromZ; z <= toZ; z++) {
-                                        var target = world.getBlockAt(x, y, z);
+                            for (long x = fromX; x <= toX; x++)
+                                for (long y = Math.max(portal.minY(), world.getMinHeight());
+                                     y <= Math.min((long) portal.maxY(), (long) world.getMaxHeight() - 1); y++)
+                                    for (long z = fromZ; z <= toZ; z++) {
+                                        var target = world.getBlockAt((int) x, (int) y, (int) z);
                                         if (onlyReplacing != null && target.getType() != onlyReplacing) continue;
                                         target.setBlockData(data, false);
                                     }
@@ -164,24 +197,65 @@ public final class PortalService {
     public CompletableFuture<Travel> travel(Player player, Portal portal) {
         PortalTarget target = portal.target();
         if (target.kind() == PortalTarget.Kind.SERVER) return travelToServer(player, portal);
+        String sourceWorld = RulesService.key(player.getWorld());
+        UUID playerId = player.getUniqueId();
         World world = plugin.getServer().getWorld(NamespacedKey.fromString(target.world()));
-        if (world == null) return CompletableFuture.completedFuture(Travel.TARGET_MISSING);
-        return teleports.teleport(player, world, target.point()).thenApply(arrived -> {
-            if (arrived) effects(player, portal);
-            return arrived ? Travel.ARRIVED : Travel.FAILED;
+        UUID operation = UUID.randomUUID();
+        CompletableFuture<Travel> result = new CompletableFuture<>();
+        workers.submit(() -> { repository.startLocalPortalTrip(operation, playerId, portal.name(),
+            sourceWorld, target.world()); return null; }).whenComplete((started, startFailure) -> {
+            if (startFailure != null) {
+                recordAttempt(playerId, portal.name(), "refused", "statistics_admission");
+                result.complete(Travel.FAILED);
+                return;
+            }
+            recordAttempt(playerId, portal.name(), "accepted", "none");
+            if (world == null) {
+                finish(operation, "target_missing", Travel.TARGET_MISSING, result);
+                return;
+            }
+            boolean scheduled = player.getScheduler().run(plugin, task -> {
+                if (!player.isOnline() || !authorized(player, portal)) { finish(operation, "not_performed", Travel.FAILED, result); return; }
+                teleports.teleportDetailed(player, world, target.point(), () -> authorized(player, portal)).whenComplete((outcome, failure) -> {
+                    if (failure != null || outcome == TeleportService.Outcome.UNKNOWN) {
+                        unresolved(operation, "teleport_result_unknown");
+                        result.complete(Travel.FAILED);
+                    } else if (outcome == TeleportService.Outcome.ARRIVED) {
+                        effects(player, portal);
+                        finish(operation, "arrived", Travel.ARRIVED, result);
+                    } else finish(operation, "not_performed", Travel.FAILED, result);
+                });
+            }, () -> finish(operation, "not_performed", Travel.FAILED, result)) != null;
+            if (!scheduled) finish(operation, "not_performed", Travel.FAILED, result);
         });
+        return result;
     }
 
     private CompletableFuture<Travel> travelToServer(Player player, Portal portal) {
         String region = portal.target().region().orElseThrow();
+        if (!region.equals(config.otherRegion()) || config.proxyNames().get(region) == null) {
+            if (invalidTargetWarned.compareAndSet(false, true)) messages.warn("portal.invalid-region");
+            return CompletableFuture.completedFuture(Travel.INVALID_TARGET);
+        }
         String proxyName = config.proxyNames().get(region);
+        String sourceWorld = RulesService.key(player.getWorld());
         TravelTicket ticket = new TravelTicket(UUID.randomUUID(), player.getUniqueId(), portal.name(),
                 portal.target().world(), portal.target().point());
         Instant expires = Instant.now().plusSeconds(config.travelTicketMinutes() * 60L);
         CompletableFuture<Travel> result = new CompletableFuture<>();
-        workers.submit(() -> { repository.issueTicket(ticket, region, expires); return null; }).whenComplete((done, failure) -> {
-            if (failure != null) { result.complete(Travel.FAILED); return; }
+        workers.submit(() -> { repository.issueTicket(ticket, region, expires, sourceWorld); return null; }).whenComplete((done, failure) -> {
+            if (failure != null) {
+                recordAttempt(ticket.player(), portal.name(), "refused", "statistics_admission");
+                result.complete(Travel.FAILED);
+                return;
+            }
+            recordAttempt(ticket.player(), portal.name(), "accepted", "none");
             boolean scheduled = player.getScheduler().run(plugin, task -> {
+                if (!player.isOnline() || !authorized(player, portal)) {
+                    withdraw(ticket, true);
+                    result.complete(Travel.FAILED);
+                    return;
+                }
                 try {
                     effects(player, portal);
                     try (var bytes = new ByteArrayOutputStream(); var output = new DataOutputStream(bytes)) {
@@ -191,20 +265,25 @@ public final class PortalService {
                     }
                     result.complete(Travel.SWITCHING);
                 } catch (IOException | RuntimeException error) {
-                    withdraw(ticket);
+                    withdraw(ticket, false);
                     result.complete(Travel.FAILED);
                 }
-            }, () -> { withdraw(ticket); result.complete(Travel.FAILED); }) != null;
-            if (!scheduled) { withdraw(ticket); result.complete(Travel.FAILED); }
+            }, () -> { withdraw(ticket, true); result.complete(Travel.FAILED); }) != null;
+            if (!scheduled) { withdraw(ticket, true); result.complete(Travel.FAILED); }
         });
         return result;
     }
 
-    private void withdraw(TravelTicket ticket) {
-        workers.submit(() -> repository.withdrawTicket(ticket.id())).exceptionally(failure -> {
+    private void withdraw(TravelTicket ticket, boolean provenNotSent) {
+        workers.submit(() -> repository.withdrawTicket(ticket.id(), provenNotSent)).exceptionally(failure -> {
             messages.warn("diagnostic.travel-ticket-withdraw");
             return false;
         });
+    }
+
+    private static boolean authorized(Player player, Portal portal) {
+        return player.isOp() || player.hasPermission("atlas.portal.use")
+                && (!portal.restricted() || player.hasPermission(portal.permission()));
     }
 
     /**
@@ -212,14 +291,70 @@ public final class PortalService {
      * Completes empty when there was no ticket.
      */
     public CompletableFuture<Optional<Travel>> arrive(Player player) {
-        return workers.submit(() -> repository.takeTicket(player.getUniqueId())).thenCompose(ticket -> {
-            if (ticket.isEmpty()) return CompletableFuture.completedFuture(Optional.<Travel>empty());
-            World world = plugin.getServer().getWorld(NamespacedKey.fromString(ticket.get().world()));
-            if (world == null) return CompletableFuture.completedFuture(Optional.of(Travel.TARGET_MISSING));
-            return teleports.teleport(player, world, ticket.get().point()).thenApply(arrived -> {
-                if (arrived) index().named(ticket.get().portal()).ifPresent(portal -> effects(player, portal));
-                return Optional.of(arrived ? Travel.ARRIVED : Travel.FAILED);
-            });
+        CompletableFuture<Optional<Travel>> result = new CompletableFuture<>();
+        UUID playerId = player.getUniqueId();
+        workers.submit(() -> repository.takeTicket(playerId)).whenComplete((ticket, failure) -> {
+            if (failure != null) { result.completeExceptionally(failure); return; }
+            if (ticket.isEmpty()) { result.complete(Optional.empty()); return; }
+            TravelTicket issued = ticket.get();
+            boolean scheduled = player.getScheduler().run(plugin, task -> {
+                if (!player.isOnline()) {
+                    finishArrival(issued.id(), "not_performed", Travel.FAILED, result);
+                    return;
+                }
+                World world = plugin.getServer().getWorld(NamespacedKey.fromString(issued.world()));
+                if (world == null) {
+                    finishArrival(issued.id(), "target_missing", Travel.TARGET_MISSING, result);
+                    return;
+                }
+                teleports.teleportDetailed(player, world, issued.point()).whenComplete((outcome, teleportFailure) -> {
+                    if (teleportFailure != null || outcome == TeleportService.Outcome.UNKNOWN) {
+                        unresolved(issued.id(), "arrival_teleport_unknown");
+                        result.complete(Optional.of(Travel.FAILED));
+                    } else if (outcome == TeleportService.Outcome.ARRIVED) {
+                        index().named(issued.portal()).ifPresent(portal -> effects(player, portal));
+                        finishArrival(issued.id(), "arrived", Travel.ARRIVED, result);
+                    } else finishArrival(issued.id(), "not_performed", Travel.FAILED, result);
+                });
+            }, () -> finishArrival(issued.id(), "not_performed", Travel.FAILED, result)) != null;
+            if (!scheduled) {
+                finishArrival(issued.id(), "not_performed", Travel.FAILED, result);
+            }
+        });
+        return result;
+    }
+
+    private void finish(UUID operation, String outcome, Travel resultValue, CompletableFuture<Travel> result) {
+        workers.submit(() -> { repository.finishPortalTrip(operation, outcome); return null; })
+                .whenComplete((ignored, failure) -> {
+                    if (failure != null) {
+                        AtlasStatistics current = statistics;
+                        if (current != null) current.observeGap("portal_terminal_write_failed", "atlas_logbook_portal_trips",
+                                "portal_trip", null);
+                    }
+                    result.complete(resultValue);
+                });
+    }
+
+    private void finishArrival(UUID operation, String outcome, Travel resultValue,
+                               CompletableFuture<Optional<Travel>> result) {
+        workers.submit(() -> { repository.finishPortalTrip(operation, outcome); return null; })
+                .whenComplete((ignored, failure) -> {
+                    if (failure != null) {
+                        AtlasStatistics current = statistics;
+                        if (current != null) current.observeGap("portal_terminal_write_failed", "atlas_logbook_portal_trips",
+                                "portal_trip", null);
+                    }
+                    result.complete(Optional.of(resultValue));
+                });
+    }
+
+    private void unresolved(UUID operation, String cause) {
+        workers.submit(() -> { repository.unresolvedPortalTrip(operation, cause); return null; }).exceptionally(failure -> {
+            AtlasStatistics current = statistics;
+            if (current != null) current.observeGap("portal_unresolved_gap_write_failed", "atlas_logbook_portal_trips",
+                    "portal_trip", null);
+            return null;
         });
     }
 

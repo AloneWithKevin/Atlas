@@ -1,15 +1,11 @@
 # Closet-owned resource pack
 
-Ferry's12 October2026 decision makes Closet the sole owner of every pack file.
-This plugin bundles and installs definitions/configuration only. Its item/glyph/lore
-IDs, text, colours and display metrics are unchanged. Definitions register through
-Closet's `registerWithClosetAssets` API7, with no local assetsRoot. Closet validates
-references and pins the active source hashes; missing, changed or revoked assets
-refuse dependent work. Duplicate asset ownership remains an error.
+Closet is the sole owner of every resource-pack file: textures, fonts, models, sounds and related assets. Atlas owns only its item/glyph definitions, authored text and references to Closet-owned stable IDs.
 
-The pack lives in `plugins/Closet/contents/pack/assets/`; matching sources live in
-Closet's `content/legacy/pack/assets/`. File I/O stays on bounded provider workers.
-Deploy the matching Closet and consumer JARs together; update contains only JARs.
-Only byte-identical verified former local pack files may be removed after builds.
-The owner restarts NA and checks startup and unchanged icon/lore presentation.
-Permissions and their existing rank allocations are unchanged.
+Atlas registers `atlas:selector` and `atlas:lore/action` through Closet's public `registerWithClosetAssets` contract. The current manifest declares the selector as an unbreakable single-stack wooden axe and the action glyph under `atlas:lore` at U+E000. It does not contain an `assets-root` or copy of a pack file.
+
+Closet validates the definition and resolves each asset from its maintained source tree. Missing, changed or ambiguous assets cause registration to fail before dependent Atlas behavior is enabled. Duplicate ownership remains an error. Keep all item/lore identifiers in Atlas while keeping the physical assets in Closet.
+
+Build the matching Atlas and Closet API artifacts from the verified workspace sources. Deploy a JAR only through the plugin update path; pack files belong directly in Closet's maintained/installed pack tree under the standing asset procedure. Never stage textures, fonts, manifests or other pack files in `plugins/update/` or copy them into Atlas's plugin data folder.
+
+The matching server/client pack and exact source/install hashes are recorded in the Atlas final audit report. Client reception and visual acceptance require the owner's in-game check.

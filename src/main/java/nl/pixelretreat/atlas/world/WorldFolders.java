@@ -80,7 +80,8 @@ public final class WorldFolders {
     public void delete(String key) throws IOException {
         if (WorldNames.builtIn(key)) throw new IOException("Refusing to delete a vanilla dimension");
         Path folder = folder(key);
-        if (Files.exists(folder)) deleteTree(folder);
+        checkPath(folder);
+        if (Files.exists(folder, LinkOption.NOFOLLOW_LINKS)) deleteTree(folder);
     }
 
     /** Unique staging tree; its contents are never a registered dimension. */
