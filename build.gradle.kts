@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "nl.pixelretreat"
-version = "0.1.9"
+version = "0.1.10"
 
 repositories {
     mavenCentral()
@@ -13,26 +13,35 @@ repositories {
 
 val folia = files("../Veyra-release/folia-api/build/libs/folia-api-26.3.local-SNAPSHOT.jar")
 val veyra = files("../.build-deps/veyra-api-item-exchange.jar")
-val campfire = files(providers.gradleProperty("campfireApiJar").getOrElse("../Campfire/build/libs/Campfire-0.7.1-api.jar"))
-val closet = files(providers.gradleProperty("closetApiJar").getOrElse("../Closet/build/libs/Closet-0.1.11-api.jar"))
+val campfire = files(providers.gradleProperty("campfireApiJar").getOrElse("../.build-deps/campfire-api-current.jar"))
+val closet = files(providers.gradleProperty("closetApiJar").getOrElse("../.build-deps/closet-api-pack-owner.jar"))
+val postbox = files(providers.gradleProperty("postboxApiJar").getOrElse("../Postbox/build/libs/Postbox-0.1.0-api.jar"))
+val logbookClient = files("../Logbook/client/build/libs/client-0.1.0.jar")
+val logbookCore = files("../Logbook/core/build/libs/core-0.1.0.jar")
+val logbookApi = files("../Logbook/api/build/libs/api-0.1.0.jar")
 
 dependencies {
     compileOnly(folia)
     compileOnly(veyra)
     compileOnly(campfire)
     compileOnly(closet)
+    compileOnly(postbox)
     compileOnly("net.kyori:adventure-api:5.2.0")
     compileOnly("net.kyori:adventure-text-serializer-plain:5.2.0")
     compileOnly("com.google.guava:guava:33.3.1-jre")
     compileOnly(files("../.build-deps/bungeecord-chat.jar"))
     implementation("org.mariadb.jdbc:mariadb-java-client:3.5.3")
     implementation("com.zaxxer:HikariCP:7.0.2")
+    implementation(logbookClient)
+    testImplementation(logbookCore)
+    testImplementation(logbookApi)
     testImplementation(folia)
     testImplementation(veyra)
     testImplementation(campfire)
-    testImplementation(files(providers.gradleProperty("campfireFixtureJar").getOrElse("../Campfire/build/libs/Campfire.jar")))
+    testImplementation(files(providers.gradleProperty("campfireFixtureJar").getOrElse("../.build-deps/campfire-test-current.jar")))
     testImplementation(closet)
-    testImplementation(files(providers.gradleProperty("closetFixtureJar").getOrElse("../Closet/build/libs/Closet-0.1.11-plain.jar")))
+    testImplementation(postbox)
+    testImplementation(files(providers.gradleProperty("closetFixtureJar").getOrElse("../.build-deps/closet-test-pack-owner.jar")))
     testImplementation(files("../.build-deps/bungeecord-chat.jar"))
     testImplementation("net.kyori:adventure-api:5.2.0")
     testImplementation("net.kyori:adventure-text-minimessage:5.2.0")
@@ -53,6 +62,8 @@ tasks.test {
     val scratch = layout.buildDirectory.dir("tmp/junit").get().asFile
     doFirst { scratch.mkdirs() }
     systemProperty("java.io.tmpdir", scratch.absolutePath)
+    systemProperty("closetTestSource", providers.gradleProperty("closetTestSource")
+            .getOrElse(file("../Closet/content/legacy").absolutePath))
 }
 tasks.processResources { filesMatching("plugin.yml") { expand("version" to project.version) } }
 tasks.jar { archiveClassifier.set("plain") }
@@ -65,6 +76,7 @@ tasks.shadowJar {
     archiveFileName.set("Atlas.jar")
     relocate("org.mariadb.jdbc", "nl.pixelretreat.atlas.internal.mariadb")
     relocate("com.zaxxer.hikari", "nl.pixelretreat.atlas.internal.hikari")
+    relocate("nl.pixelretreat.logbook.client", "nl.pixelretreat.atlas.internal.logbook.client")
     dependencies { exclude(dependency("org.slf4j:slf4j-api:.*")) }
     mergeServiceFiles()
 }

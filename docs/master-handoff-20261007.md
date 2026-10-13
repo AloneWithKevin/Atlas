@@ -1,3 +1,5 @@
+> **Superseded release handoff (7 October 2026).** The JAR, API hash, provider versions, catalog count and release assumptions below describe an older build. Use the external [Atlas final report](../../Ferry/Eindrapporten/Atlas.md) for current source, matching Logbook dependency, final hashes, merge and release hold. The current candidate is not deployed because matching Logbook provider deployment remains deferred.
+
 # Atlas release handoff — 2026-10-07
 
 ## Complete source package

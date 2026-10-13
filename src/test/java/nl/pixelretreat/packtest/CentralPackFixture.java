@@ -11,7 +11,6 @@ import static org.mockito.Mockito.*;
 public final class CentralPackFixture {
  private static final Map<DefaultClosetService,Plugin> owners=Collections.synchronizedMap(new WeakHashMap<>());
  private CentralPackFixture() {}
- public static Path path(String original) { return Path.of(System.getProperty("packTestInput"),original); }
  public static Plugin owner(DefaultClosetService service) { return Objects.requireNonNull(owners.get(service)); }
  public static DefaultClosetService service(Plugin consumer,dev.veyra.api.VeyraCluster cluster,CampfireRuntime runtime,ExecutorService worker) {
   Plugin source="Closet".equals(consumer.getName())?consumer:mock(Plugin.class);when(source.getName()).thenReturn("Closet");when(source.isEnabled()).thenReturn(true);

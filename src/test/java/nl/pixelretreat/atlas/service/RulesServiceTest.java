@@ -10,6 +10,7 @@ import nl.pixelretreat.atlas.api.AtlasFlag;
 import nl.pixelretreat.atlas.config.AtlasConfig;
 import nl.pixelretreat.atlas.storage.AtlasRepository;
 import nl.pixelretreat.atlas.world.WorldGenerator;
+import nl.pixelretreat.logbook.client.ProducerLimits;
 import nl.pixelretreat.atlas.world.WorldRecord;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
@@ -18,6 +19,30 @@ import org.junit.jupiter.api.Test;
 
 /** The AtlasRules view must fail closed before readiness and follow published and reloaded rules. */
 class RulesServiceTest {
+    @Test void sourcePublicationWaitsForThePreviousBoundedWorkerChange() throws Exception {
+        try (var workers = new AtlasWorkers(2, 8)) {
+            var service = new RulesService(mock(Plugin.class), mock(AtlasRepository.class), workers, config(true));
+            var started = new java.util.concurrent.CountDownLatch(1);
+            var release = new java.util.concurrent.CountDownLatch(1);
+            var order = new java.util.concurrent.CopyOnWriteArrayList<Integer>();
+            var first = service.serialized(() -> {
+                started.countDown();
+                assertTrue(release.await(5, java.util.concurrent.TimeUnit.SECONDS));
+                order.add(1);
+                return 1;
+            });
+            try {
+                assertTrue(started.await(5, java.util.concurrent.TimeUnit.SECONDS));
+                var second = service.serialized(() -> { order.add(2); return 2; });
+                assertFalse(second.isDone());
+                release.countDown();
+                first.get(5, java.util.concurrent.TimeUnit.SECONDS);
+                second.get(5, java.util.concurrent.TimeUnit.SECONDS);
+                assertEquals(java.util.List.of(1, 2), order);
+            } finally { release.countDown(); }
+        }
+    }
+
     @Test void tradingIsRefusedBeforeTheFirstRulesLoad() {
         RulesService rules = new RulesService(mock(Plugin.class), mock(AtlasRepository.class), null, config(true));
         assertFalse(rules.ready());
@@ -77,6 +102,6 @@ class RulesServiceTest {
         flags.put(AtlasFlag.TRADING, trading);
         return new AtlasConfig("EU", Map.of("EU", "survival", "NA", "survival-na"),
                 "127.0.0.1", 3306, "pixelretreat_veyra", "atlas", "", "disable",
-                121, 16, 2500, 5, 4096, 1024, flags, 1, 16);
+                121, 16, 2500, 5, 4096, 1024, flags, 1, 16, ProducerLimits.APPROVED_START);
     }
 }

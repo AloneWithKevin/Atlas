@@ -81,6 +81,10 @@ public final class StartupOperations {
         return switch (operation.kind()) {
             case DELETE -> {
                 if (target != null && target.enabled()) yield new Outcome(operation, false, "operation.delete-reenabled");
+                if (repository.loadPortals().stream().anyMatch(portal -> portal.world().equals(operation.world())))
+                    yield new Outcome(operation, false, "world.error.has-portals");
+                if (repository.loadRegions().stream().anyMatch(region -> region.world().equals(operation.world())))
+                    yield new Outcome(operation, false, "world.error.has-regions");
                 folders.delete(operation.world());
                 repository.deleteWorld(operation.world());
                 yield new Outcome(operation, true, "deleted");

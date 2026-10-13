@@ -150,7 +150,7 @@ public final class WorldAdminService {
 
     /** Runs a change on a worker, then rewrites the data pack and publishes fresh rules. */
     private CompletableFuture<Result> change(java.util.concurrent.Callable<Result> action) {
-        return workers.submit(() -> {
+        return rules.serialized(() -> {
             Result result = action.call();
             if (result == Result.DONE) {
                 var worlds = repository.loadWorlds();

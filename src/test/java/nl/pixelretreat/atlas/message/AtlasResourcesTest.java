@@ -45,6 +45,32 @@ import org.junit.jupiter.api.io.TempDir;
 class AtlasResourcesTest {
     @TempDir Path directory;
 
+    @Test void actualCampfireDeliveryRetainsExternalEnglishBaseAfterLanguagePreferenceChanges() throws Exception {
+        Files.copy(Path.of(getClass().getResource("/messages.yml").toURI()), directory.resolve("messages.yml"));
+        Plugin owner = mock(Plugin.class);
+        when(owner.isEnabled()).thenReturn(true);
+        when(owner.getName()).thenReturn("Atlas");
+        when(owner.getDataFolder()).thenReturn(directory.toFile());
+        var preferences = mock(nl.pixelretreat.campfire.api.CampfirePreferences.class);
+        java.util.UUID viewer = java.util.UUID.randomUUID();
+        when(preferences.get(viewer)).thenReturn(CompletableFuture.completedFuture(
+                new nl.pixelretreat.campfire.api.PlayerPreferences("nl", "Europe/Amsterdam", false, false, "")));
+        try (var localization = new DefaultCampfireLocalization(Runnable::run);
+             var delivery = new nl.pixelretreat.campfire.delivery.DefaultCampfireDelivery(mock(Plugin.class),
+                     mock(VeyraCluster.class), new nl.pixelretreat.campfire.channel.Channels(java.util.List.of(
+                             new nl.pixelretreat.campfire.channel.ChatChannel("global", "campfire.channel.global", true, 0))),
+                     preferences, localization, () -> Component.text("Server "))) {
+            localization.register(owner).toCompletableFuture().get();
+            String rendered = PlainTextComponentSerializer.plainText().serialize(delivery.render(owner, viewer,
+                    "portal.switching", Map.of("region", "<red>NA"), Map.of()).toCompletableFuture().get());
+            assertEquals("Off we go! Travelling to <red>NA…", rendered);
+            when(preferences.get(viewer)).thenReturn(CompletableFuture.completedFuture(
+                    nl.pixelretreat.campfire.api.PlayerPreferences.newPlayer()));
+            assertEquals(rendered, PlainTextComponentSerializer.plainText().serialize(delivery.render(owner, viewer,
+                    "portal.switching", Map.of("region", "<red>NA"), Map.of()).toCompletableFuture().get()));
+        }
+    }
+
     @Test void shippedCatalogSatisfiesTheMessageContract() throws Exception {
         var path = Path.of(getClass().getResource("/messages.yml").toURI());
         var templates = new MessageFileLoader().load("Atlas", path);
@@ -150,7 +176,7 @@ class AtlasResourcesTest {
     }
 
     @Test void selectorGlyphUsesExternalBitmapAndDoesNotChangeTextFont() throws Exception {
-        Path content = nl.pixelretreat.packtest.CentralPackFixture.path("content");
+        Path content = Path.of(System.getProperty("closetTestSource"), "pack");
         var image = ImageIO.read(content.resolve("assets/pixelretreat/textures/gui/atlas_lore/action.png").toFile());
         assertEquals(64, image.getWidth());
         assertEquals(64, image.getHeight());

@@ -73,6 +73,7 @@ final class AtlasRepositoryMariaDbTest {
                     new PortalTarget(PortalTarget.Kind.SERVER, Optional.of(other), "atlas:hub", Optional.empty()),
                     2500, Optional.of("minecraft:block.portal.travel"), Optional.of("PORTAL"), true, Optional.of("NETHER_PORTAL"));
             repository.savePortal(portal);
+            assertFalse(repository.insertPortal(portal.withCooldown(123)), "same-name creation must not replace a portal");
             assertEquals(portal, repository.loadPortals().getFirst());
             assertTrue(repository.deletePortal("gate"));
             assertFalse(repository.deletePortal("gate"));
@@ -80,6 +81,28 @@ final class AtlasRepositoryMariaDbTest {
             repository.saveRegion(KeepLoadedRegion.fromBlocks("hub", "minecraft:overworld", 0, 0, 31, 31));
             assertEquals(4, repository.loadRegions().getFirst().chunkCount());
             assertTrue(repository.deleteRegion("hub"));
+
+            // A reference created after queuing deletion must be rechecked before folder removal.
+            assertTrue(repository.insertWorld("atlas:guarded", WorldGenerator.VOID, Optional.empty()));
+            Path guarded = dimensions.resolve("atlas/guarded/region");
+            Files.createDirectories(guarded);
+            Files.writeString(guarded.resolve("chunk"), "retained");
+            assertTrue(repository.disableAndQueueDelete("atlas:guarded", UUID.randomUUID()));
+            repository.savePortal(new Portal("late", "atlas:guarded", 0, 60, 0, 1, 63, 0,
+                    PortalTarget.spawn("minecraft:overworld"), 2500, Optional.empty(), Optional.empty(), false, Optional.empty()));
+            var guardedOutcomes = new StartupOperations(repository, new WorldFolders(dimensions, 1)).run();
+            assertEquals("world.error.has-portals", guardedOutcomes.getFirst().detail());
+            assertEquals("retained", Files.readString(guarded.resolve("chunk")));
+            repository.deletePortal("late");
+            assertTrue(repository.disableAndQueueDelete("atlas:guarded", UUID.randomUUID()));
+            repository.saveRegion(KeepLoadedRegion.fromBlocks("late", "atlas:guarded", 0, 0, 15, 15));
+            guardedOutcomes = new StartupOperations(repository, new WorldFolders(dimensions, 1)).run();
+            assertEquals("world.error.has-regions", guardedOutcomes.getFirst().detail());
+            assertEquals("retained", Files.readString(guarded.resolve("chunk")));
+            repository.deleteRegion("late");
+            assertTrue(repository.disableAndQueueDelete("atlas:guarded", UUID.randomUUID()));
+            assertTrue(new StartupOperations(repository, new WorldFolders(dimensions, 1)).run().getFirst().success());
+            assertFalse(Files.exists(guarded));
 
             UUID player = UUID.randomUUID();
             TravelTicket ticket = new TravelTicket(UUID.randomUUID(), player, "gate", "atlas:hub", Optional.empty());
@@ -104,6 +127,78 @@ final class AtlasRepositoryMariaDbTest {
             assertFalse(Files.exists(dimensions.resolve("atlas/arena")));
             assertFalse(repository.loadWorlds().containsKey("atlas:arena"));
             assertTrue(repository.pending().isEmpty());
+        }
+    }
+
+    @Test void consumingNewestTicketExpiresOlderPendingTicketsForTheSamePlayerAndTarget() throws Exception {
+        String url = System.getenv("ATLAS_TEST_JDBC_URL");
+        assumeTrue(url != null && !url.isBlank(), "Set an isolated ATLAS_TEST_JDBC_URL to run MariaDB tests");
+        HikariConfig poolConfig = new HikariConfig();
+        poolConfig.setJdbcUrl(url);
+        poolConfig.setUsername(System.getenv().getOrDefault("ATLAS_TEST_DB_USER", "root"));
+        poolConfig.setPassword(System.getenv().getOrDefault("ATLAS_TEST_DB_PASSWORD", ""));
+        poolConfig.setMaximumPoolSize(3);
+        try (HikariDataSource pool = new HikariDataSource(poolConfig)) {
+            AtlasRepository origin = new AtlasRepository(pool, "EU");
+            AtlasRepository destination = new AtlasRepository(pool, "NA");
+            origin.initialize();
+
+            UUID player = UUID.randomUUID();
+            TravelTicket older = new TravelTicket(UUID.randomUUID(), player, "old_gate", "atlas:old", Optional.empty());
+            origin.issueTicket(older, "NA", Instant.now().plusSeconds(60));
+            Thread.sleep(12);
+            TravelTicket latest = new TravelTicket(UUID.randomUUID(), player, "new_gate", "atlas:new", Optional.empty());
+            origin.issueTicket(latest, "NA", Instant.now().plusSeconds(60));
+            UUID unrelatedPlayer = UUID.randomUUID();
+            TravelTicket unrelated = new TravelTicket(UUID.randomUUID(), unrelatedPlayer, "other_gate",
+                    "atlas:unrelated", Optional.empty());
+            origin.issueTicket(unrelated, "NA", Instant.now().plusSeconds(60));
+
+            assertEquals(latest, destination.takeTicket(player).orElseThrow(),
+                    "the existing newest-on-arrival selection still chooses the latest ticket");
+            assertTrue(destination.takeTicket(player).isEmpty(),
+                    "an older route cannot be resurrected by a later unrelated target join");
+            assertEquals(unrelated, destination.takeTicket(unrelatedPlayer).orElseThrow(),
+                    "supersession is isolated to the same player and target region");
+
+            try (java.sql.Connection connection = pool.getConnection();
+                 java.sql.PreparedStatement query = connection.prepareStatement(
+                         "SELECT expires_at <= CURRENT_TIMESTAMP(3), consumed_at IS NULL FROM atlas_travel_ticket WHERE id=?")) {
+                query.setString(1, older.id().toString());
+                try (java.sql.ResultSet row = query.executeQuery()) {
+                    assertTrue(row.next());
+                    assertTrue(row.getBoolean(1), "the older ticket expires in the consume transaction");
+                    assertTrue(row.getBoolean(2), "the old ticket remains unconsumed, not falsely terminal");
+                }
+            }
+
+            UUID tiedPlayer = UUID.randomUUID();
+            TravelTicket tiedOne = new TravelTicket(UUID.randomUUID(), tiedPlayer, "tie_one", "atlas:one", Optional.empty());
+            TravelTicket tiedTwo = new TravelTicket(UUID.randomUUID(), tiedPlayer, "tie_two", "atlas:two", Optional.empty());
+            origin.issueTicket(tiedOne, "NA", Instant.now().plusSeconds(60));
+            origin.issueTicket(tiedTwo, "NA", Instant.now().plusSeconds(60));
+            try (java.sql.Connection connection = pool.getConnection();
+                 java.sql.PreparedStatement update = connection.prepareStatement(
+                         "UPDATE atlas_travel_ticket SET created_at=CURRENT_TIMESTAMP(3) WHERE id IN (?,?)")) {
+                update.setString(1, tiedOne.id().toString());
+                update.setString(2, tiedTwo.id().toString());
+                assertEquals(2, update.executeUpdate());
+            }
+            TravelTicket tiedWinner = destination.takeTicket(tiedPlayer).orElseThrow();
+            assertTrue(tiedWinner.id().equals(tiedOne.id()) || tiedWinner.id().equals(tiedTwo.id()),
+                    "equal created_at values keep the existing unspecified winner");
+            assertTrue(destination.takeTicket(tiedPlayer).isEmpty(), "the unselected timestamp tie cannot be resurrected");
+            UUID tiedLoser = tiedWinner.id().equals(tiedOne.id()) ? tiedTwo.id() : tiedOne.id();
+            try (java.sql.Connection connection = pool.getConnection();
+                 java.sql.PreparedStatement query = connection.prepareStatement(
+                         "SELECT expires_at <= CURRENT_TIMESTAMP(3), consumed_at IS NULL FROM atlas_travel_ticket WHERE id=?")) {
+                query.setString(1, tiedLoser.toString());
+                try (java.sql.ResultSet row = query.executeQuery()) {
+                    assertTrue(row.next());
+                    assertTrue(row.getBoolean(1));
+                    assertTrue(row.getBoolean(2));
+                }
+            }
         }
     }
 }

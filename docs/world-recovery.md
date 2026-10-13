@@ -1,61 +1,25 @@
-# World copy preparation and recovery
+# World operation and copy recovery
 
-## Two starts
+## When operations run
 
-Clone and reset commands atomically queue work and disable the target declaration.
-The next server start prepares the copy while that target is absent from the startup
-registry. Successful publication enables its declaration and writes the pack for the
-following start, which loads the completed world. An already disabled reset remains
-disabled after publication.
+World registry data is read before plugins start. Atlas therefore writes the generated data pack and queues the operation in MariaDB when an administrator changes the declared world set, but performs directory changes during `onLoad`, before world loading. Create/import/enable/disable changes need the next server start. Clone and reset require a preparation start and a later activation start. A stale data-pack declaration may require another start before a folder can be touched. Atlas does not create or unload worlds at runtime.
 
-Minecraft reads registries before plugin onLoad. Atlas refuses folder mutation for
-any target still declared in its own startup pack; removing a stale declaration can
-require an additional start. No private hooks or runtime world creation are used.
+## Durable evidence and phases
 
-## Durable evidence
+`atlas_world_copy` records operation phase, original enabled state and sealed entry counts. `atlas_world_copy_entry` records relative paths, directory/file type, sizes and SHA-256 for prepared and original trees. The evidence uses Atlas's current server identity in the shared database; no local journal substitutes for it.
 
-atlas_world_copy records phase, original activation state and sealed entry counts.
-atlas_world_copy_entry records every relative path, directory, file size and SHA-256
-for prepared and original trees. Both private tables use the existing server identity.
-CREATE TABLE IF NOT EXISTS adds them without deleting or migrating existing rows.
-There is no persistent local journal.
+Copy phases are `QUEUED → COPYING → PREPARED → MOVING_OLD → PUBLISHING → PUBLISHED → APPLIED`; clone skips `MOVING_OLD`. Intent is committed before same-parent atomic directory moves. Each resumed move must match the sealed evidence. Reset keeps its original tree in `.NAME.atlas-ID-original`; the prepared tree uses `.NAME.atlas-ID-staging`. Existing trees are never silently overwritten.
 
-Phases: QUEUED → COPYING → PREPARED → MOVING_OLD → PUBLISHING → PUBLISHED → APPLIED.
-Clones skip MOVING_OLD. Intentions commit before same-parent atomic directory moves.
-Every resumed move verifies paths, sizes, hashes and counts against sealed evidence.
-Existing trees are never overwritten. Original reset data remains in
-.NAME.atlas-ID-original; preparation uses .NAME.atlas-ID-staging. Neither is declared
-as a dimension.
+Only a completely sealed and verified prepared copy may finish automatically after an interruption. Unsealed copying, missing or changed evidence, unexpected files or conflicting paths become uncertain. The target stays disabled; Atlas does not copy again, adopt unknown content, or delete unknown trees. Legacy clone/reset receipts without evidence are not guessed into the new state machine. There is no staff command to force a resolution or automatic retention expiry for preserved originals.
 
-Only a fully verified prepared publication resumes automatically. Unsealed COPYING,
-missing evidence, unexpected paths or changed content result in UNCERTAIN, a failed
-receipt and a disabled target. No source is copied again and no unknown tree is
-deleted, adopted or rolled back. Legacy clone/reset rows without evidence are refused.
-Staff must bring such cases to the owner; there is no new resolution command or
-automatic backup-retention policy.
+The pending command lists operations still awaiting work, not a full history of terminal results. Cancellation is accepted only before preparation has claimed the copy; it restores a reset's original enabled state or removes a clone declaration as appropriate.
 
-The pending command lists pending operations, not failed receipts. Startup reports
-failures through the existing keyed console template. Evidence stays in private
-tables and folders. Normal enable/reset/delete commands block unresolved copy
-targets. Cancellation is allowed only before preparation claims a queued copy;
-it atomically restores the reset's prior enabled state or removes a clone declaration.
+Queued delete checks that its target is not a built-in dimension and has no portal or keep-loaded references. The references are checked again immediately before directory removal; if one has appeared, Atlas retains the folder and records the refused operation.
 
-Since 0.1.7, the refused deletion of a re-enabled world stores the stable
-operation.delete-reenabled meaning and resolves its catalog text when reporting.
-Existing receipts are not migrated; operation state and refusal behavior are unchanged.
+## Threads and limits
 
-## Threads and durability limits
+Startup traversal streams entries and caps outstanding file tasks at `workers.threads`. Database writes use the bounded Atlas worker pool and Hikari pool. On interruption, outstanding copy writers are cancelled and retired before their parent operation returns. Files are flushed before evidence is sealed. Unsupported atomic directory moves preserve the operation for verified recovery. Tests cover interruption boundaries, altered evidence and SQL rollback; they do not prove hardware power-loss guarantees. This protocol is not a substitute for server backups.
 
-Traversal streams entries. At most workers.threads file futures are outstanding;
-per-entry evidence uses the bounded Hikari pool. Failure/interruption cancels pending
-work and waits for all copy writers to retire before returning. Folder work happens
-before world loading; no game thread waits for a copy. Copied files are flushed before
-evidence is sealed. Unsupported atomic moves preserve the operation for verified retry.
-Tests cover interrupted execution, SQL rollback and altered evidence, not hardware
-power-loss durability. This protocol does not replace backups.
+## Startup failure
 
-## Bootstrap failure
-
-Before Campfire is available, Atlas preloads generic startup.failed console text
-from its own bundled messages.yml. Failure uses that text and disables Atlas.
-There is no player fallback or visible exception/credential diagnostic.
+Before Campfire is available, Atlas has a bundled generic console failure message. Startup failure logs one short diagnostic and disables Atlas. It does not expose exceptions or database credentials to players.

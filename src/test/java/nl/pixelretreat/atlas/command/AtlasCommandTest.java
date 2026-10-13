@@ -19,6 +19,7 @@ import nl.pixelretreat.atlas.api.AtlasFlag;
 import nl.pixelretreat.atlas.config.AtlasConfig;
 import nl.pixelretreat.atlas.message.AtlasMessages;
 import nl.pixelretreat.atlas.service.RulesService;
+import nl.pixelretreat.logbook.client.ProducerLimits;
 import nl.pixelretreat.atlas.storage.AtlasRepository;
 import org.bukkit.Server;
 import org.bukkit.command.CommandSender;
@@ -27,6 +28,48 @@ import org.junit.jupiter.api.Test;
 
 /** The trading flag flows through the shared flag command, completion, access and info output. */
 class AtlasCommandTest {
+    @Test void explicitSourceWorldAndRemoteDestinationCompletionUseExecutablePositions() {
+        var rules = mock(RulesService.class);
+        var command = new AtlasCommand(null, null, new AtlasCommand.Services(config(true), rules, null, null, null, null, null, null, null));
+        for (String[] input : List.of(
+                new String[]{"portal", "create", "gate", "overworld", "the_"},
+                new String[]{"portal", "target", "gate", "server", "NA", "the_"},
+                new String[]{"keeploaded", "set", "hub", "the_"},
+                new String[]{"portal", "target", "gate", "location", "the_"})) {
+            assertEquals(List.of("the_nether", "the_end"), command.onTabComplete(admin(), null, "atlas", input));
+        }
+        assertTrue(command.onTabComplete(admin(), null, "atlas", new String[]{"portal", "target", "gate", "server", "XX", ""}).isEmpty());
+    }
+    @Test void remotePortalCoordinatesAndDirectionsMustBeFinite() {
+        var portals = mock(nl.pixelretreat.atlas.service.PortalService.class);
+        when(portals.update(anyString(), any())).thenReturn(CompletableFuture.completedFuture(java.util.Optional.empty()));
+        var messages = mock(AtlasMessages.class);
+        when(messages.destination(any())).thenReturn("NA:arena 1,64,2");
+        var command = new AtlasCommand(null, messages, new AtlasCommand.Services(
+                config(true), null, null, null, portals, null, null, null, null));
+        command.onCommand(admin(), null, "atlas", new String[]{"portal", "target", "gate", "server", "NA", "arena", "1", "64", "2"});
+        verify(portals).update(eq("gate"), any());
+        clearInvocations(portals);
+        for (int index = 6; index <= 10; index++) {
+            for (String invalid : List.of("NaN", "Infinity", "-Infinity")) {
+                String[] input = {"portal", "target", "gate", "server", "NA", "arena", "1", "64", "2", "90", "0"};
+                input[index] = invalid;
+                command.onCommand(admin(), null, "atlas", input);
+            }
+        }
+        verifyNoInteractions(portals);
+    }
+
+    @Test void operatorAdmissionAndCompletionIgnoreNegativeLeafChecks() {
+        var messages = mock(AtlasMessages.class);
+        var command = new AtlasCommand(null, messages, services(mock(RulesService.class), null, null));
+        var operator = mock(CommandSender.class);
+        when(operator.isOp()).thenReturn(true);
+        command.onCommand(operator, null, "atlas", new String[]{"help"});
+        verify(messages).send(operator, "help.lines");
+        assertTrue(command.onTabComplete(operator, null, "atlas", new String[]{"fl"}).contains("flag"));
+    }
+
     @Test void consoleSpawnRequiresFiniteExplicitCoordinatesBeforeStorage(){
         RulesService rules=mock(RulesService.class);
         when(rules.setSpawn(anyString(),any())).thenReturn(CompletableFuture.completedFuture(null));
@@ -144,7 +187,7 @@ class AtlasCommandTest {
         flags.put(AtlasFlag.TRADING, trading);
         return new AtlasConfig("EU", Map.of("EU", "survival", "NA", "survival-na"),
                 "127.0.0.1", 3306, "pixelretreat_veyra", "atlas", "", "disable",
-                121, 16, 2500, 5, 4096, 1024, flags, 1, 16);
+                121, 16, 2500, 5, 4096, 1024, flags, 1, 16, ProducerLimits.APPROVED_START);
     }
 
     private static CommandSender admin() {

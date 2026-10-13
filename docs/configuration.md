@@ -1,85 +1,69 @@
 # Configuration
 
-## Message catalog
+Atlas reads `plugins/Atlas/config.yml` during startup. Required configuration is validated strictly; a missing or invalid field prevents Atlas from starting. The repository template contains empty database username/password values. Fill actual credentials only in the server-local config. Diagnostics redact all database details.
 
-Atlas declares 113 required message keys: the original 104 plus eight
-diagnostic/operation/destination templates. The travel-ticket warnings and delete
-re-enabled reason now use the catalog, as do local/remote spawn/location and portal
-bounds descriptions. Destination placeholders are plain input; enclosing messages
-retain their existing colors. Coordinate display still truncates to integers.
-Messages can be overridden and reloaded through the existing Campfire reload.
-The additional `selector.overflow` key reports confirmed Market storage and
-directs the recipient to `/overflow`. Existing approved messages are unchanged.
-Do not remove required keys. The release installer adds missing bundled keys while
-preserving existing overrides; database credentials remain in config.yml only.
+Set `server.region` to the exact current Postbox region on that backend (`EU` or `NA`). These are the only supported node identities. Do not configure a third region or copy a proxy alias as a new backend identity. Keep the shared database settings consistent with the existing `pixelretreat_veyra` connection. `server.proxy-names.EU` and `.NA` must match the Velocity names for the current regional destinations.
 
-`plugins/Atlas/config.yml` is read once at startup; every key is required and an invalid value
-stops Atlas. Keep it identical on EU and NA apart from `server.region` and the credentials. The
-distributed file has an empty username and password; fill them in on the server only.
+The Atlas configuration has these sections:
 
-For an existing installation, add `default-flags.trading: true` before this version starts. A
-missing key stops Atlas; there is no migration, fallback or guessed default.
-
-| Key | Meaning |
+| Key | Meaning and validated range |
 | --- | --- |
-| `server.region` | `EU` or `NA`. Must equal Postbox's region; world rows are stored under it. Selector delivery intents follow the player across nodes. |
-| `server.proxy-names.EU`, `.NA` | Velocity server names used by cross-server portals. |
-| `database.host`, `port`, `name`, `username`, `password`, `ssl-mode` | Shared MariaDB connection (`pixelretreat_veyra`). `ssl-mode`: `disable`, `trust`, `verify-ca` or `verify-full`. |
-| `datapack.pack-format` | Data pack format of the running Minecraft version (121 for 26.3). |
-| `teleport.safe-search-radius` | Blocks (0–64) around a vanilla spawn searched for a safe landing spot. |
-| `portals.default-cooldown-millis` | Cooldown of new portals (0–600000). |
-| `portals.travel-ticket-minutes` | Validity of a cross-server travel ticket (1–60). |
-| `portals.max-fill-blocks` | Largest portal volume that may be filled (1–65536). |
-| `keep-loaded.max-chunks-per-region` | Largest keep-loaded region (1–65536 chunks). |
-| `default-flags.<flag>` | Value of each flag in worlds that do not override it. |
-| `workers.threads`, `workers.queue-size` | Bounded database/file workers (1–16 threads, queue 1–4096). |
+| `server.region` | Actual Postbox identity: `EU` or `NA`. |
+| `server.proxy-names.EU`, `server.proxy-names.NA` | Velocity server names for those two regions. |
+| `database.host`, `port`, `name`, `username`, `password`, `ssl-mode` | Shared MariaDB settings. SSL mode is `disable`, `trust`, `verify-ca` or `verify-full`. Repository credentials are blank. |
+| `datapack.pack-format` | Data-pack format for the running game version (121 for Veyra 26.3). |
+| `teleport.safe-search-radius` | Search radius around a vanilla spawn: 0–64 blocks. |
+| `portals.default-cooldown-millis` | Default for new portals: 0–600000 ms. |
+| `portals.travel-ticket-minutes` | Cross-region ticket validity: 1–60 minutes. |
+| `portals.max-fill-blocks` | Largest fill volume: 1–65536 blocks. |
+| `keep-loaded.max-chunks-per-region` | Largest saved region: 1–65536 chunks. |
+| `default-flags.<flag>` | Boolean default for each of the 25 world flags. |
+| `workers.threads`, `workers.queue-size` | Bounded workers: 1–16 threads and queue size 1–4096. |
+| `logbook.maximum-pending` | Owner-approved bound for pending facts and terminal holds, default 100000. |
+| `logbook.maximum-fact-bytes` | Owner-approved per-fact payload bound, default 32768 bytes. |
 
-## Messages and item text
+The `logbook` limits are part of the approved producer contract. Durable operations reserve measurement capacity before the Atlas operation begins; when the bounded outbox has no capacity, Atlas refuses the action instead of performing an unmeasured durable change. Keep these limits positive and consistent with the matching Logbook provider. See [Logbook integration](logbook-integration.md).
 
-`messages.yml` contains every chat/console and selector name/lore key. Chat uses Campfire's
-ordinary-text default, `#F3E5AB` for subjects/labels and `#A8D5A2` for actions. Selector
-name/values are white and click instructions use `#A8D5A2`. Atlas 0.1.2 changes colors only;
-existing keys, English wording and line layout are preserved. Custom installed messages
-need review during an authorized release; a new JAR does not overwrite them automatically.
+## World flags
 
-Atlas 0.1.3 prefixes the existing selector action line with the registered
-`atlas:lore/action` mini-glyph. `closet.yml` sets `assets-root: content`; the external
-font/bitmap must be installed in the Atlas data folder independently of the JAR.
-Registration supplies them to Closet's required pack input. Keep the matching glyph
-prefix, manifest and external content together; a matching client pack release is
-required for rendering. See [external content](content.md).
+Every flag is boolean. The per-world override wins; otherwise Atlas uses `default-flags`. The shipped defaults are on except `keep-inventory`, which is off.
 
-## Flags
+| Flag | Effect when off |
+| --- | --- |
+| `hostile-mobs` | Blocks game-origin hostile-mob spawns. |
+| `friendly-mobs` | Blocks game-origin friendly-mob spawns. |
+| `plugin-hostile-mobs` | Blocks plugin-origin hostile-mob spawns. |
+| `plugin-friendly-mobs` | Blocks plugin-origin friendly-mob spawns. |
+| `tnt-damage`, `crystal-damage` | Disables damage and block damage from the matching source. |
+| `explosion-damage` | Disables explosion damage and block damage. |
+| `fire-damage` | Disables fire, lava, campfire and magma damage, combustion, ignition and spread. |
+| `pvp` | Prevents direct player and player-projectile damage. |
+| `fall-damage`, `drowning` | Prevents the matching damage cause. |
+| `hunger` | Prevents player food level decrease. |
+| `block-break`, `block-place` | Blocks player block breaking or placing. |
+| `leaf-decay`, `crop-trampling` | Prevents leaf decay or farmland trampling. |
+| `item-drop`, `item-pickup` | Prevents player item drops or pickups. |
+| `weather` | Locks weather to the explicitly configured value, or clear when none is set. |
+| `time-cycle` | Stops the daylight cycle unless the world has no fixed time. |
+| `time-skip` | Prevents sleeping from skipping night. |
+| `mob-griefing` | Sets the `mobGriefing` game rule. |
+| `keep-inventory` | Sets the `keepInventory` game rule. |
+| `portals` | Blocks Atlas portal use in the world. |
+| `trading` | Blocks player-to-player trades handled by Handshake in the world. |
 
-| Flag | Default | When off |
-| --- | --- | --- |
-| `hostile-mobs` | on | Hostile creatures do not appear through any game mechanic (natural, spawner, egg, breeding, `/summon`, …). |
-| `friendly-mobs` | on | The same for animals, ambient and water creatures, villagers and golems. |
-| `plugin-hostile-mobs` | on | Hostile creatures spawned by plugins (spawn reason `CUSTOM`) are refused. |
-| `plugin-friendly-mobs` | on | The same for friendly creatures spawned by plugins. |
-| `tnt-damage` / `crystal-damage` | on | TNT (and TNT minecarts) / end crystals neither damage entities nor break blocks. |
-| `explosion-damage` | on | No explosion damages entities or breaks blocks. |
-| `fire-damage` | on | No fire, lava, campfire or magma damage, no burning, igniting or fire spread. |
-| `pvp` | on | Players cannot hurt players directly or with projectiles. |
-| `fall-damage`, `drowning` | on | No fall / drowning damage for any entity. |
-| `hunger` | on | Players' food level does not drop. |
-| `block-break`, `block-place` | on | Breaking / placing blocks is refused. |
-| `leaf-decay`, `crop-trampling` | on | Leaves do not decay / farmland is not trampled. |
-| `item-drop`, `item-pickup` | on | Players cannot drop / pick up items. |
-| `weather` | on | The weather stays as set (clear if nothing is set). |
-| `time-cycle` | on | The clock stops. |
-| `time-skip` | on | Sleeping cannot skip the night. |
-| `mob-griefing` | on | The `mobGriefing` game rule is off. |
-| `keep-inventory` | off | (When on) the `keepInventory` game rule is on. |
-| `portals` | on | Atlas portals in this world do nothing. |
-| `trading` | on | Player-to-player trades through Handshake are refused in this world. |
+Change a flag with `/atlas flag <world> <flag> on|off|default`; `default` removes that world's override. Runtime changes to `config.yml` require a restart.
+
+## Messages and presentation
+
+`messages.yml` is validated against Atlas's 114-key contract. Atlas registers its authored English catalog with Campfire before message-dependent features start, and delivers text through Campfire's public service. The tested current rendering stays English after a viewer changes locale; Atlas does not claim translated prose. `/atlas reload` reloads this catalog and the current database snapshots. Keep all required keys and placeholders. Existing installed overrides are a separate server-side state and must be preserved when preparing a release.
+
+Subjects and labels use the approved soft yellow `#F3E5AB`; actions use `#A8D5A2`; selector name and corner values are white. The selector's lore begins with the `atlas:lore/action` glyph. Its item/lore definitions are owned by Atlas, while Closet owns the actual font and texture files. See [content](content.md) and [asset ownership](closet-pack-ownership.md).
 
 ## Files Atlas writes
 
-- `<level>/datapacks/atlas/`: `pack.mcmeta` and one `data/atlas/dimension/<name>.json` per enabled
-  Atlas world. Generated from MariaDB; do not edit by hand.
-- `<level>/dimensions/atlas/<name>/`: Atlas world folders, written by Minecraft. Atlas copies or
-  deletes them only during startup, for queued operations.
-- Same-parent .NAME.atlas-ID-staging and .NAME.atlas-ID-original directories retain
-  prepared and original trees. No automatic cleanup period is configured.
-  See [world recovery](world-recovery.md). No new configuration keys are required.
+- `<level>/datapacks/atlas/`: generated `pack.mcmeta` and dimensions for enabled Atlas worlds. Do not edit by hand.
+- `<level>/dimensions/atlas/<name>/`: Minecraft world data. Atlas mutates folders only for queued startup operations.
+- `.NAME.atlas-ID-staging` and `.NAME.atlas-ID-original`: prepared or retained source trees during copy recovery. No automatic retention expiry is configured.
+- MariaDB tables for plugin state and Logbook source journals. Do not edit these tables manually.
+
+See [world recovery](world-recovery.md) for the files Atlas retains on uncertain copies.

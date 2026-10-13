@@ -3,7 +3,9 @@ package nl.pixelretreat.atlas.config;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import nl.pixelretreat.atlas.api.AtlasFlag;
+import nl.pixelretreat.logbook.client.ProducerLimits;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
@@ -14,11 +16,12 @@ public record AtlasConfig(
         String databasePassword, String databaseSslMode,
         int packFormat, int safeSearchRadius, int defaultCooldownMillis, int travelTicketMinutes,
         int maxFillBlocks, int maxChunksPerRegion, Map<AtlasFlag, Boolean> defaultFlags,
-        int workerThreads, int workerQueueSize) {
+        int workerThreads, int workerQueueSize, ProducerLimits logbookLimits) {
 
     public AtlasConfig {
         proxyNames = Map.copyOf(proxyNames);
         defaultFlags = Map.copyOf(new EnumMap<>(defaultFlags));
+        Objects.requireNonNull(logbookLimits);
     }
 
     /** Reads every required key; no key has a hidden default. */
@@ -42,7 +45,9 @@ public record AtlasConfig(
                 source.getInt("datapack.pack-format"), source.getInt("teleport.safe-search-radius"),
                 source.getInt("portals.default-cooldown-millis"), source.getInt("portals.travel-ticket-minutes"),
                 source.getInt("portals.max-fill-blocks"), source.getInt("keep-loaded.max-chunks-per-region"),
-                flags, source.getInt("workers.threads"), source.getInt("workers.queue-size"));
+                flags, source.getInt("workers.threads"), source.getInt("workers.queue-size"),
+                ProducerLimits.read(source.getConfigurationSection("logbook") == null ? null
+                        : source.getConfigurationSection("logbook").getValues(false)));
         value.validate();
         return value;
     }
@@ -54,7 +59,7 @@ public record AtlasConfig(
     }
 
     private void validate() {
-        if (!region.matches("EU|NA") || !proxyNames.containsKey("EU") || !proxyNames.containsKey("NA")
+        if (!region.matches("EU|NA") || !proxyNames.keySet().equals(Set.of("EU", "NA"))
                 || databasePort < 1 || databasePort > 65535
                 || !databaseSslMode.matches("disable|trust|verify-ca|verify-full")
                 || packFormat < 1 || safeSearchRadius < 0 || safeSearchRadius > 64
@@ -72,9 +77,7 @@ public record AtlasConfig(
 
     /** Diagnostics never include the database password. */
     @Override public String toString() {
-        return "AtlasConfig[region=" + region + ", proxyNames=" + proxyNames + ", databaseHost=" + databaseHost
-                + ", databasePort=" + databasePort + ", databaseName=" + databaseName + ", databaseUsername="
-                + databaseUsername + ", databasePassword=***, databaseSslMode=" + databaseSslMode + ", packFormat="
+        return "AtlasConfig[region=" + region + ", proxyNames=" + proxyNames + ", database=***, packFormat="
                 + packFormat + ", safeSearchRadius=" + safeSearchRadius + ", defaultCooldownMillis="
                 + defaultCooldownMillis + ", travelTicketMinutes=" + travelTicketMinutes + ", maxFillBlocks="
                 + maxFillBlocks + ", maxChunksPerRegion=" + maxChunksPerRegion + ", defaultFlags=" + defaultFlags

@@ -36,6 +36,7 @@ import nl.pixelretreat.atlas.service.SelectionService;
 import nl.pixelretreat.atlas.service.StartupOperations;
 import nl.pixelretreat.atlas.service.TeleportService;
 import nl.pixelretreat.atlas.service.WorldAdminService;
+import nl.pixelretreat.atlas.statistics.AtlasStatistics;
 import nl.pixelretreat.atlas.storage.AtlasRepository;
 import nl.pixelretreat.atlas.world.DatapackWriter;
 import nl.pixelretreat.atlas.world.WorldFolders;
@@ -45,6 +46,7 @@ import nl.pixelretreat.campfire.api.MessageCatalog;
 import nl.pixelretreat.closet.api.ClosetDeliveries;
 import nl.pixelretreat.closet.api.ClosetService;
 import nl.pixelretreat.closet.api.ContentRegistration;
+import nl.pixelretreat.postbox.api.PostboxBootstrapIdentity;
 import nl.pixelretreat.atlas.service.SelectorDeliveryService;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -76,6 +78,7 @@ public final class AtlasPlugin extends JavaPlugin {
     private volatile ClosetService closet;
     private volatile ContentRegistration closetRegistration;
     private volatile KeepLoadedService keepLoaded;
+    private volatile AtlasStatistics statistics;
 
     /** Opens the database and runs queued folder work while no world is loaded yet. */
     @Override public void onLoad() {
@@ -84,6 +87,8 @@ public final class AtlasPlugin extends JavaPlugin {
             ensureResource("config.yml");
             AtlasConfig settings = AtlasConfig.read(YamlConfiguration.loadConfiguration(
                     getDataFolder().toPath().resolve("config.yml").toFile()));
+            BootstrapIdentityGuard.requireMatch(
+                    getServer().getServicesManager().load(PostboxBootstrapIdentity.class), settings.region());
             config = settings;
             levelFolder = levelFolder();
             database = openDatabase(settings);
@@ -198,13 +203,26 @@ public final class AtlasPlugin extends JavaPlugin {
         }
         campfire = messages;
         closet = items;
+        String backend = link.localNode().orElseThrow().name();
         messages.register(this).toCompletableFuture()
-                .thenApply(registered -> {
+                .thenCompose(registered -> {
                     AtlasMessages.validateCatalog(registered);
                     catalog = registered;
-                    return registered;
+                    AtlasStatistics sourceStatistics = new AtlasStatistics(database, settings.logbookLimits(), backend,
+                            settings.workerQueueSize(), () -> getLogger().warning(
+                                    net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+                                            .serialize(registered.get("diagnostic.statistics"))));
+                    sourceStatistics.attachWorker(task -> workers.submit(task));
+                    statistics = sourceStatistics;
+                    repository.statistics(sourceStatistics);
+                    return workers.submit(() -> {
+                        sourceStatistics.initialize();
+                        sourceStatistics.beginCollection();
+                        repository.reconcileWorldStatistics();
+                        return null;
+                    });
                 })
-                .thenCompose(registered -> items.registerWithClosetAssets(this).toCompletableFuture())
+                .thenCompose(ignored -> items.registerWithClosetAssets(this).toCompletableFuture())
                 .thenCompose(registration -> {
                     closetRegistration = registration;
                     return rules.reload();
@@ -231,8 +249,8 @@ public final class AtlasPlugin extends JavaPlugin {
         CampfireDelivery delivery = getServer().getServicesManager().load(CampfireDelivery.class);
         ClosetDeliveries deliveries = getServer().getServicesManager().load(ClosetDeliveries.class);
         if (delivery == null || deliveries == null || deliveries.apiVersion() < 1) {
-            if (attempt >= 30) { fail(new IllegalStateException("Campfire delivery or Closet deliveries unavailable")); return; }
-            getServer().getGlobalRegionScheduler().runDelayed(this, task -> install(settings, rules, attempt + 1), 20L);
+            if (attempt >= CONTRACT_ATTEMPTS) { fail(new IllegalStateException("Campfire delivery or Closet deliveries unavailable")); return; }
+            getServer().getGlobalRegionScheduler().runDelayed(this, task -> install(settings, rules, attempt + 1), CONTRACT_INTERVAL_TICKS);
             return;
         }
         if (!authoredReady) {
@@ -255,7 +273,9 @@ public final class AtlasPlugin extends JavaPlugin {
             SelectorDeliveryService selectors = new SelectorDeliveryService(this, repository, workers, deliveries);
             TeleportService teleports = new TeleportService(this, rules, settings);
             PortalService portals = new PortalService(this, repository, workers, settings, teleports, messages);
+            portals.statistics(statistics);
             KeepLoadedService regions = new KeepLoadedService(this, repository, workers);
+            regions.statistics(statistics);
             keepLoaded = regions;
             WorldAdminService worlds = new WorldAdminService(repository, workers, rules, datapack(settings),
                     folders(settings), portals, regions);
@@ -265,18 +285,22 @@ public final class AtlasPlugin extends JavaPlugin {
                 getServer().getGlobalRegionScheduler().run(this, task -> {
                     if (stopped.get() || !isEnabled()) return;
                     getServer().getMessenger().registerOutgoingPluginChannel(this, "BungeeCord");
-                    PlayerListener players = new PlayerListener(this, rules, portals, selections, messages, selectors);
+                    PlayerListener players = new PlayerListener(this, rules, portals, selections, messages, selectors,
+                            statistics);
                     getServer().getPluginManager().registerEvents(players, this);
                     getServer().getPluginManager().registerEvents(new PortalListener(rules, portals, messages), this);
                     getServer().getPluginManager().registerEvents(new SelectorListener(closet, selections, messages), this);
                     getServer().getServicesManager().register(AtlasRules.class, rules, this, ServicePriority.Normal);
                     AtlasCommand command = new AtlasCommand(this, messages, new AtlasCommand.Services(settings, rules,
                             worlds, teleports, portals, regions, selections, player -> selectors.request(player.getUniqueId()),
-                            () -> reloadAll(rules, portals, regions)));
+                            () -> reloadAll(rules, portals, regions), statistics));
                     Objects.requireNonNull(getCommand("atlas")).setExecutor(command);
                     Objects.requireNonNull(getCommand("atlas")).setTabCompleter(command);
                     for (Player online : getServer().getOnlinePlayers()) {
-                        online.getScheduler().run(this, ignored -> players.arrived(online), null);
+                        online.getScheduler().run(this, ignored -> {
+                            players.observeWorldVisit(online);
+                            players.arrived(online);
+                        }, null);
                     }
                     getLogger().info(messages.plain("startup.ready"));
                 });
@@ -306,7 +330,7 @@ public final class AtlasPlugin extends JavaPlugin {
             if (outcome.success()) getLogger().info(messages.plain("startup.operation-done", values));
             else {
                 Map<String, String> withDetail = new java.util.HashMap<>(values);
-                withDetail.put("detail", messages.operationDetail(outcome.detail()));
+                withDetail.put("detail", messages.operationDetail(outcome.detail(), outcome.operation().world()));
                 getLogger().warning(messages.plain("startup.operation-failed", withDetail));
             }
         }
@@ -333,6 +357,7 @@ public final class AtlasPlugin extends JavaPlugin {
         stopped.set(true);
         getServer().getServicesManager().unregisterAll(this);
         if (keepLoaded != null) keepLoaded.releaseAll();
+        if (statistics != null) statistics.closeCapture();
         if (workers != null) workers.close();
         if (database != null) database.close();
         if (closetRegistration != null) closetRegistration.close();

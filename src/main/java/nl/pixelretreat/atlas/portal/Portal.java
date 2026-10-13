@@ -22,7 +22,8 @@ public record Portal(String name, String world, int minX, int minY, int minZ, in
 
     /** Number of blocks the portal covers. */
     public long volume() {
-        return ((long) maxX - minX + 1) * ((long) maxY - minY + 1) * ((long) maxZ - minZ + 1);
+        return Math.multiplyExact(Math.multiplyExact((long) maxX - minX + 1,
+                (long) maxY - minY + 1), (long) maxZ - minZ + 1);
     }
 
     /** The permission node of a restricted portal. */

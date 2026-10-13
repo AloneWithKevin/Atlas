@@ -30,6 +30,7 @@ public final class AtlasMessages {
 
     /** Every message key with its exact placeholder names. */
     public static final Map<String, Set<String>> CONTRACT = Map.ofEntries(
+            Map.entry("diagnostic.statistics", Set.of()),
             Map.entry("diagnostic.travel-ticket-read", Set.of()),
             Map.entry("diagnostic.travel-ticket-withdraw", Set.of()),
             Map.entry("operation.delete-reenabled", Set.of()),
@@ -174,6 +175,12 @@ public final class AtlasMessages {
     /** Only this known diagnostic key is translated; other details remain technical values. */
     public String operationDetail(String detail) {
         return "operation.delete-reenabled".equals(detail) ? plain("operation.delete-reenabled") : detail;
+    }
+
+    public String operationDetail(String detail, String world) {
+        if (detail.equals("world.error.has-portals") || detail.equals("world.error.has-regions"))
+            return plain(detail, Map.of("world", nl.pixelretreat.atlas.world.WorldNames.shortName(world)));
+        return operationDetail(detail);
     }
 
     /** Nested descriptions are plain text; the enclosing message keeps its target color. */

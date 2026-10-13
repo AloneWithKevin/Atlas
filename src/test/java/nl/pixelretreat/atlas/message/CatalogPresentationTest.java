@@ -82,6 +82,11 @@ class CatalogPresentationTest {
         var output = mock(AtlasMessages.class);
         when(portals.arrive(player)).thenReturn(java.util.concurrent.CompletableFuture.failedFuture(
                 new java.sql.SQLException("private connection details")));
+        doAnswer(call -> {
+            java.util.function.Consumer<org.bukkit.entity.Player> reply = call.getArgument(1);
+            reply.accept(player);
+            return null;
+        }).when(portals).onPlayerScheduler(eq(player), any());
         var listener = new nl.pixelretreat.atlas.listener.PlayerListener(mock(Plugin.class),
                 mock(nl.pixelretreat.atlas.service.RulesService.class), portals,
                 mock(nl.pixelretreat.atlas.service.SelectionService.class), output);

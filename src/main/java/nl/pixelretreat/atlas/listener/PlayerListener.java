@@ -5,6 +5,7 @@ import nl.pixelretreat.atlas.service.PortalService;
 import nl.pixelretreat.atlas.service.RulesService;
 import nl.pixelretreat.atlas.service.SelectionService;
 import nl.pixelretreat.atlas.service.SelectorDeliveryService;
+import nl.pixelretreat.atlas.statistics.AtlasStatistics;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -22,26 +23,42 @@ public final class PlayerListener implements Listener {
     private final SelectionService selections;
     private final AtlasMessages messages;
     private final SelectorDeliveryService selectors;
+    private final AtlasStatistics statistics;
 
     public PlayerListener(Plugin plugin, RulesService rules, PortalService portals,
                           SelectionService selections, AtlasMessages messages) {
-        this(plugin, rules, portals, selections, messages, null);
+        this(plugin, rules, portals, selections, messages, null, null);
     }
 
     public PlayerListener(Plugin plugin, RulesService rules, PortalService portals,
                           SelectionService selections, AtlasMessages messages, SelectorDeliveryService selectors) {
+        this(plugin, rules, portals, selections, messages, selectors, null);
+    }
+
+    public PlayerListener(Plugin plugin, RulesService rules, PortalService portals,
+                          SelectionService selections, AtlasMessages messages, SelectorDeliveryService selectors,
+                          AtlasStatistics statistics) {
         this.plugin = plugin;
         this.rules = rules;
         this.portals = portals;
         this.selections = selections;
         this.messages = messages;
         this.selectors = selectors;
+        this.statistics = statistics;
     }
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        if (statistics != null) statistics.startVisit(player.getUniqueId(), RulesService.key(player.getWorld()), "join");
         rules.applyGameMode(event.getPlayer());
         arrived(event.getPlayer());
+    }
+
+    /** Starts measurement at the current observation boundary, including players already online at readiness. */
+    public void observeWorldVisit(Player player) {
+        if (statistics != null) statistics.startVisit(player.getUniqueId(), RulesService.key(player.getWorld()),
+                "readiness_observation");
     }
 
     /** Completes a cross-server portal trip if a travel ticket is waiting for this player. */
@@ -55,21 +72,28 @@ public final class PlayerListener implements Listener {
             });
         });
         portals.arrive(player).whenComplete((travel, failure) -> {
-            if (failure != null) {
-                messages.warn("diagnostic.travel-ticket-read");
-                messages.send(player, "portal.arrival-failed");
-                return;
-            }
-            if (travel.isEmpty()) return;
-            if (travel.get() != PortalService.Travel.ARRIVED) messages.send(player, "portal.arrival-failed");
+            portals.onPlayerScheduler(player, current -> {
+                if (failure != null) {
+                    messages.warn("diagnostic.travel-ticket-read");
+                    messages.send(current, "portal.arrival-failed");
+                    return;
+                }
+                if (travel.isEmpty()) return;
+                if (travel.get() != PortalService.Travel.ARRIVED) messages.send(current, "portal.arrival-failed");
+            });
         });
     }
 
     @EventHandler(priority = EventPriority.HIGH)
-    public void onChangedWorld(PlayerChangedWorldEvent event) { rules.applyGameMode(event.getPlayer()); }
+    public void onChangedWorld(PlayerChangedWorldEvent event) {
+        if (statistics != null) statistics.rotateVisit(event.getPlayer().getUniqueId(),
+                RulesService.key(event.getPlayer().getWorld()));
+        rules.applyGameMode(event.getPlayer());
+    }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
+        if (statistics != null) statistics.endVisit(event.getPlayer().getUniqueId(), "quit");
         selections.clear(event.getPlayer().getUniqueId());
         portals.forget(event.getPlayer().getUniqueId());
     }
