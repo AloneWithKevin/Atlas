@@ -2,7 +2,7 @@
 
 ## Current final audit
 
-The authoritative exact verification record for the current merged Atlas and Logbook sources is [Ferry/Eindrapporten/Atlas.md](../../Ferry/Eindrapporten/Atlas.md). It records the final Java 25 build commands, exact test counts, isolated MariaDB/PHP coverage, per-repository source and artifact status, remaining limitations, current target state and owner acceptance conditions. The final run passed 215 Java tests with 0 skips, failures or errors. The final capture shows no queued Postbox, Atlas, or Logbook JAR; unrelated queued files remain outside this change. The Postbox source/installed file-hash match does not prove runtime load. Current Atlas and Logbook plugin JARs are not queued, and the installed files have older hashes. Do not copy an earlier version's count or hash as proof for the current source.
+The authoritative exact verification record for the current merged Atlas and Logbook sources is [Ferry/Eindrapporten/Atlas.md](../../Ferry/Eindrapporten/Atlas.md). It records the final Java 25 build commands, exact test counts, isolated MariaDB/PHP coverage, per-repository source and artifact status, remaining limitations, current target state and owner acceptance conditions. The final run passed 215 Java tests with 0 skips, failures or errors. The 13:49 UTC audit capture showed no queued Postbox, Atlas, or Logbook JAR. After the later scope-specific deployment authorization, matching Logbook performance-provider and Atlas JARs were queued at 14:26 UTC for Ferry's restart; their installed files still have the older hashes. Postbox's source/installed file-hash match does not prove runtime load. Do not copy an earlier version's count or hash as proof for the current source.
 
 The 13 October final audit used a private loopback MariaDB instance in an isolated data directory. The test fixture recorded `productionAccessed: false` and `stopped: true`. No production database or running game server was used for mutating tests.
 
@@ -12,7 +12,7 @@ The dated 0.1.0–0.1.9 sections below are retained as historical verification f
 
 ## Owner acceptance
 
-Builds, unit tests, MariaDB tests, source review, public API tests and pack validation are not in-game acceptance. The current source/installed Postbox hash match does not show which version the server loaded. No Postbox, Atlas, or Logbook JAR is queued; unrelated queued files remain outside this change. Installed Atlas and Logbook plugin JARs still have older hashes. Website helpers are merged source but have not been copied to the host. Ferry owns server restarts and the checklist in the external final report.
+Builds, unit tests, MariaDB tests, source review, public API tests and pack validation are not in-game acceptance. The current source/installed Postbox hash match does not show which version the server loaded. The matching Logbook performance-provider and Atlas JARs are queued on VeyraTestNA01; the installed plugin JARs still have older hashes pending Ferry's restart. Website helpers are merged source but have not been copied to the host. Ferry owns server restarts and the checklist in the external final report.
 
 # Verification
 
