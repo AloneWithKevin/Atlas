@@ -14,13 +14,13 @@ World visits use the observed event boundary as their time origin. The observati
 
 The local Logbook build activates only api, client, core, and performance; the general command plugin and general website project remain paused. Atlas consumers use the in-process asynchronous LogbookApi. readDistributions returns exact BigInteger sum and sample count; do not calculate a mean with a fabricated denominator.
 
-The staged registry helper is designed for the existing staff Stats page and its existing `stats` permission gate; it is not installed on the hosted site. For Atlas it displays aggregate Network rows, separate EU and NA rows, and a combined EU+NA row. Distribution rows preserve sum and sample count. Current keep-loaded snapshots show the latest separate backend values and a combined sum only when both backend snapshots are proved. The owner explicitly chose to retain internal UUID statistics while showing aggregates in the staff overview. Atlas registry reads use only aggregate `subject='*'` rollups and do not list individual player UUIDs, per-player routes, or coordinates. The separate hard-coded whitelist in `website/public/_inc/logbook_dashboard.php` contains no `atlas:*` definitions, so the staged generic player search/profile does not expose Atlas UUID facts. Trusted in-process API consumers may still query UUID-keyed facts.
+The merged-source registry helper is designed for the existing staff Stats page and its existing `stats` permission gate; it is not installed on the hosted site. For Atlas it displays aggregate Network rows, separate EU and NA rows, and a combined EU+NA row. Distribution rows preserve sum and sample count. Current keep-loaded snapshots show the latest separate backend values and a combined sum only when both backend snapshots are proved. The owner explicitly chose to retain internal UUID statistics while showing aggregates in the staff overview. Atlas registry reads use only aggregate `subject='*'` rollups and do not list individual player UUIDs, per-player routes, or coordinates. The separate hard-coded whitelist in `website/public/_inc/logbook_dashboard.php` contains no `atlas:*` definitions, so the merged generic player-search/profile source has no Atlas UUID definitions. The hosted files were not cut over. Trusted in-process API consumers may still query UUID-keyed facts.
 
 Atlas portal_attempts, admin_actions and observation_gaps are daily UTC aggregate counters. A native bounded query over these facts is exact only at complete UTC-day boundaries. Partial-day or one-sided ranges return UNKNOWN with no number; all-time totals remain unchanged. diagnostic_gaps has flush-interval grain and is unknown for any bounded range. Exact original portal/world/visit duration facts retain their event timestamps.
 
 ## Existing page and host boundary
 
-The output reuses the existing staff Stats page. Its staged implementation changes only:
+The output reuses the existing staff Stats page. The merged source changes only:
 - website/public/_inc/logbook_registry.php
 - website/public/staffpanel/stats/logbook-registry.php
 - website/tests/dashboard.php
