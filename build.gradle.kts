@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "nl.pixelretreat"
-version = "0.1.10"
+version = "0.1.11"
 
 repositories {
     mavenCentral()
@@ -16,9 +16,9 @@ val veyra = files("../.build-deps/veyra-api-item-exchange.jar")
 val campfire = files(providers.gradleProperty("campfireApiJar").getOrElse("../.build-deps/campfire-api-current.jar"))
 val closet = files(providers.gradleProperty("closetApiJar").getOrElse("../.build-deps/closet-api-pack-owner.jar"))
 val postbox = files(providers.gradleProperty("postboxApiJar").getOrElse("../Postbox/build/libs/Postbox-0.1.0-api.jar"))
-val logbookClient = files("../Logbook/client/build/libs/client-0.1.0.jar")
-val logbookCore = files("../Logbook/core/build/libs/core-0.1.0.jar")
-val logbookApi = files("../Logbook/api/build/libs/api-0.1.0.jar")
+val logbookClient = files(providers.gradleProperty("logbookClientJar").getOrElse("../Logbook/client/build/libs/client-0.1.0.jar"))
+val logbookCore = files(providers.gradleProperty("logbookCoreJar").getOrElse("../Logbook/core/build/libs/core-0.1.0.jar"))
+val logbookApi = files(providers.gradleProperty("logbookApiJar").getOrElse("../Logbook/api/build/libs/api-0.1.0.jar"))
 
 dependencies {
     compileOnly(folia)

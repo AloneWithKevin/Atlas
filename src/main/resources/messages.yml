@@ -141,7 +141,7 @@ reload:
 items:
   selector:
     name: "<white>Atlas Selector</white>"
-    lore: "<white><font:atlas:lore></font></white> <#A8D5A2>Left-click: pick</#A8D5A2> <white>corner 1</white>  <#A8D5A2>Right-click: pick</#A8D5A2> <white>corner 2</white>"
+    lore: "<white><left_glyph></white> <#A8D5A2>Left-click: pick</#A8D5A2> <white>corner 1</white>  <white><right_glyph></white> <#A8D5A2>Right-click: pick</#A8D5A2> <white>corner 2</white>"
 diagnostic:
   statistics: "Atlas statistics capture is incomplete or unavailable."
   travel-ticket-read: "Atlas could not read a travel ticket."

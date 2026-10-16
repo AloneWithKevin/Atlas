@@ -108,7 +108,14 @@ class AtlasResourcesTest {
                  var service = nl.pixelretreat.packtest.CentralPackFixture.service(owner, mock(VeyraCluster.class), runtime, worker)) {
                 assertTrue(service.registerWithClosetAssets(owner, contribution).toCompletableFuture().get(5, TimeUnit.SECONDS).active());
                 assertTrue(service.catalog().items().containsKey(ItemId.parse("atlas:selector")));
-                assertEquals(1, service.catalog().glyphs().size());
+                assertTrue(service.catalog().glyphs().containsKey(ItemId.parse("closet:lore/click_left")));
+                assertTrue(service.catalog().glyphs().containsKey(ItemId.parse("closet:lore/click_right")));
+                var selector = contribution.items().getFirst();
+                assertEquals(Map.of("left_glyph", ItemId.parse("closet:lore/click_left"),
+                        "right_glyph", ItemId.parse("closet:lore/click_right")), selector.lore().getFirst().glyphs());
+                var rich = Map.of("left_glyph", service.glyph(ItemId.parse("closet:lore/click_left")),
+                        "right_glyph", service.glyph(ItemId.parse("closet:lore/click_right")));
+                assertNotNull(catalog.get("en", "items.selector.lore", Map.of(), rich));
                 assertEquals(Key.key("atlas:lore"), service.glyph(ItemId.parse("atlas:lore/action")).font());
                 assertEquals("\uE000", PlainTextComponentSerializer.plainText().serialize(
                         service.glyph(ItemId.parse("atlas:lore/action"))));
@@ -164,40 +171,43 @@ class AtlasResourcesTest {
             assertColor(info, value, null); // Campfire owns ordinary chat's default color.
         }
         assertColor(catalog.get("items.selector.name"), "Atlas Selector", TextColor.color(0xFFFFFF));
-        var lore = catalog.get("items.selector.lore");
+        var lore = selectorLore(catalog);
         for (String action : List.of("Left-click: pick", "Right-click: pick")) {
             assertColor(lore, action, TextColor.color(0xA8D5A2));
         }
         for (String value : List.of("corner 1", "corner 2")) {
             assertColor(lore, value, TextColor.color(0xFFFFFF));
         }
-        assertEquals("\uE000 Left-click: pick corner 1  Right-click: pick corner 2",
+        assertEquals("LEFT Left-click: pick corner 1  RIGHT Right-click: pick corner 2",
                 PlainTextComponentSerializer.plainText().serialize(lore));
     }
 
-    @Test void selectorGlyphUsesExternalBitmapAndDoesNotChangeTextFont() throws Exception {
+    @Test void selectorGlyphsUseExternalCanonicalBitmapsWithoutChangingTextFont() throws Exception {
         Path content = Path.of(System.getProperty("closetTestSource"), "pack");
-        var image = ImageIO.read(content.resolve("assets/pixelretreat/textures/gui/atlas_lore/action.png").toFile());
-        assertEquals(64, image.getWidth());
-        assertEquals(64, image.getHeight());
-        assertTrue(image.getColorModel().hasAlpha());
-        assertEquals(0, image.getRGB(0, 0) >>> 24);
-        var font = new org.yaml.snakeyaml.Yaml().loadAs(Files.readString(content.resolve("assets/atlas/font/lore.json")), Map.class);
-        var bitmap = (Map<?, ?>) ((List<?>) font.get("providers")).getFirst();
-        assertEquals("bitmap", bitmap.get("type"));
-        assertEquals("pixelretreat:gui/atlas_lore/action.png", bitmap.get("file"));
-        assertEquals(8, bitmap.get("height"));
-        assertEquals(7, bitmap.get("ascent"));
-        assertEquals(List.of("\uE000"), bitmap.get("chars"));
-        var lore = catalog().get("items.selector.lore");
-        assertColor(lore, "\uE000", TextColor.color(0xFFFFFF));
+        for (String name : List.of("click_left", "click_right")) {
+            var image = ImageIO.read(content.resolve("assets/closet/textures/lore/standard/" + name + ".png").toFile());
+            assertEquals(64, image.getWidth());
+            assertEquals(64, image.getHeight());
+            assertTrue(image.getColorModel().hasAlpha());
+            assertEquals(0, image.getRGB(0, 0) >>> 24);
+        }
+        var lore = selectorLore(catalog());
+        assertColor(lore, "LEFT", TextColor.color(0xFFFFFF));
+        assertColor(lore, "RIGHT", TextColor.color(0xFFFFFF));
         assertFonts(lore, null);
+    }
+
+    private Component selectorLore(LoadedMessageCatalog catalog) {
+        // Distinct test components prove placement and isolate font inheritance without inventing a production character.
+        return catalog.getRich("items.selector.lore", Map.of(), Map.of(
+                "left_glyph", Component.text("LEFT").font(Key.key("test:mouse")),
+                "right_glyph", Component.text("RIGHT").font(Key.key("test:mouse"))));
     }
 
     private void assertFonts(Component component, Key inherited) {
         Key font = component.font() == null ? inherited : component.font();
         if (component instanceof TextComponent text && !text.content().isEmpty()) {
-            assertEquals(text.content().equals("\uE000") ? Key.key("atlas:lore") : null, font,
+            assertEquals((text.content().equals("LEFT") || text.content().equals("RIGHT")) ? Key.key("test:mouse") : null, font,
                     "The custom font must stay confined to the glyph");
         }
         for (Component child : component.children()) assertFonts(child, font);

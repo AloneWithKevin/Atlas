@@ -102,7 +102,7 @@ public final class AtlasMessages {
             Map.entry("keeploaded.saved", Set.of("region", "world", "chunks")),
             Map.entry("keeploaded.deleted", Set.of("region")), Map.entry("keeploaded.not-found", Set.of("region")),
             Map.entry("reload.done", Set.of()), Map.entry("reload.failed", Set.of()),
-            Map.entry("items.selector.name", Set.of()), Map.entry("items.selector.lore", Set.of()));
+            Map.entry("items.selector.name", Set.of()), Map.entry("items.selector.lore", Set.of("left_glyph", "right_glyph")));
 
     private final Plugin owner;
     private final MessageCatalog catalog;

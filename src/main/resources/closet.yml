@@ -7,7 +7,10 @@ items:
     unbreakable: true
     name-key: items.selector.name
     lore:
-      - items.selector.lore
+      - key: items.selector.lore
+        glyphs:
+          left_glyph: closet:lore/click_left
+          right_glyph: closet:lore/click_right
 glyphs:
   atlas:lore/action:
     font: atlas:lore
