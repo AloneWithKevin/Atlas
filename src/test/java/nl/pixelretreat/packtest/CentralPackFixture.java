@@ -20,7 +20,25 @@ public final class CentralPackFixture {
   when(sharedRuntime.localization()).thenReturn(registry);
   when(registry.register(any())).thenAnswer(call->call.getArgument(0)==source?CompletableFuture.completedFuture(catalog):runtime.localization().register(call.getArgument(0)));
   var service=new DefaultClosetService(source,cluster,sharedRuntime,worker);owners.put(service,source);
-  service.register(source,new ContentContribution(List.of(),List.of(),root.resolve("pack"))).toCompletableFuture().join();
+  service.register(source,new ContentContribution(List.of(),sharedGlyphs(root),root.resolve("pack"))).toCompletableFuture().join();
   return service;
  }
+ /** Use the real public source registrations, without parsing unrelated item/material definitions. */
+ private static List<GlyphDefinition> sharedGlyphs(Path root) {
+  try {
+   Map<?,?> manifest=new org.yaml.snakeyaml.Yaml().load(Files.readString(root.resolve("closet.yml")));
+   Map<?,?> definitions=(Map<?,?>)Objects.requireNonNull(manifest.get("glyphs"));
+   var result=new ArrayList<GlyphDefinition>();
+   definitions.forEach((id,value)->{
+    if(id.toString().startsWith("closet:lore/")) {
+     Map<?,?> glyph=(Map<?,?>)value;
+     result.add(new GlyphDefinition(ItemId.parse(id.toString()),ItemId.parse(glyph.get("font").toString()),
+      ((Number)glyph.get("codepoint")).intValue(),((Number)glyph.get("width")).intValue(),
+      ((Number)glyph.get("height")).intValue(),((Number)glyph.get("ascent")).intValue()));
+    }
+   });
+   return List.copyOf(result);
+  } catch(java.io.IOException failure) { throw new java.io.UncheckedIOException(failure); }
+ }
+
 }
