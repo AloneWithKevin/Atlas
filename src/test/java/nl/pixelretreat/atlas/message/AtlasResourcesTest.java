@@ -55,8 +55,10 @@ class AtlasResourcesTest {
         java.util.UUID viewer = java.util.UUID.randomUUID();
         when(preferences.get(viewer)).thenReturn(CompletableFuture.completedFuture(
                 new nl.pixelretreat.campfire.api.PlayerPreferences("nl", "Europe/Amsterdam", false, false, "")));
+        Plugin host = mock(Plugin.class);
+        when(host.isEnabled()).thenReturn(true);
         try (var localization = new DefaultCampfireLocalization(Runnable::run);
-             var delivery = new nl.pixelretreat.campfire.delivery.DefaultCampfireDelivery(mock(Plugin.class),
+             var delivery = new nl.pixelretreat.campfire.delivery.DefaultCampfireDelivery(host,
                      mock(VeyraCluster.class), new nl.pixelretreat.campfire.channel.Channels(java.util.List.of(
                              new nl.pixelretreat.campfire.channel.ChatChannel("global", "campfire.channel.global", true, 0))),
                      preferences, localization, () -> Component.text("Server "))) {

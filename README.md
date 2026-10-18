@@ -35,3 +35,7 @@ Build from the workspace root:
 - [Final audit report](../Ferry/Eindrapporten/Atlas.md)
 
 The selector's item and lore definitions are in Atlas. All texture, font and other pack files are owned and served by Closet; Atlas does not bundle them in its JAR.
+
+The workspace build exports `message-contract.json` from the compiled code-owned
+contract declared by `message-contract-export.json`. Shared catalog verification
+checks exact text and component placeholders independently of message defaults.

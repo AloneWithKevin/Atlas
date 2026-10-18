@@ -110,6 +110,11 @@ public final class AtlasMessages {
     private final AtomicBoolean deliveryFailureLogged = new AtomicBoolean();
     private final Map<UUID, CompletableFuture<Void>> playerQueues = new ConcurrentHashMap<>();
 
+    /** Independent code-owned keys and exact text/component placeholder names. */
+    public static Map<String, Set<String>> contract() {
+        return CONTRACT;
+    }
+
     public AtlasMessages(Plugin owner, MessageCatalog catalog, CampfireDelivery delivery) {
         this.owner = owner;
         this.catalog = catalog;
