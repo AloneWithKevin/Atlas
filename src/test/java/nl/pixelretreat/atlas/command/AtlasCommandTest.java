@@ -176,7 +176,7 @@ class AtlasCommandTest {
     }
 
     private static AtlasCommand.Services services(RulesService rules,
-            java.util.function.Function<org.bukkit.entity.Player, CompletableFuture<nl.pixelretreat.atlas.service.SelectorDeliveryService.Result>> selector,
+            java.util.function.BiFunction<CommandSender, org.bukkit.entity.Player, CompletableFuture<nl.pixelretreat.atlas.service.SelectorDeliveryService.Result>> selector,
             java.util.function.Supplier<CompletableFuture<Void>> reload) {
         return new AtlasCommand.Services(null, rules, null, null, null, null, null, selector, reload);
     }

@@ -1141,17 +1141,7 @@ public final class AtlasRepository {
     /** The region code this repository writes, for messages and tests. */
     public String server() { return server.toUpperCase(Locale.ROOT); }
 
-    /** Network-wide selector intent: pending deliveries retain their ID across nodes and restarts. */
-    public UUID reserveSelector(UUID player, UUID candidate) throws SQLException {
-        try (Connection connection = database.getConnection(); PreparedStatement insert = connection.prepareStatement("""
-                INSERT INTO atlas_selector_delivery (player, operation_id, completed) VALUES (?, ?, FALSE)
-                ON DUPLICATE KEY UPDATE operation_id = IF(completed, VALUES(operation_id), operation_id), completed = FALSE""")) {
-            insert.setString(1, player.toString()); insert.setString(2, candidate.toString()); insert.executeUpdate();
-        }
-        return pendingSelector(player).orElseThrow(() -> new SQLException("Selector intent unavailable"));
-    }
-
-    /** Looks up an existing request without creating a new one. */
+    /** Read-only historical selector evidence. Never used to authorize physical replay. */
     public Optional<UUID> pendingSelector(UUID player) throws SQLException {
         try (Connection connection = database.getConnection(); PreparedStatement query = connection.prepareStatement(
                 "SELECT operation_id FROM atlas_selector_delivery WHERE player = ? AND completed = FALSE")) {
@@ -1162,11 +1152,4 @@ public final class AtlasRepository {
         }
     }
 
-    /** A late acknowledgement cannot settle a newer selector request. */
-    public void completeSelector(UUID player, UUID operation) throws SQLException {
-        try (Connection connection = database.getConnection(); PreparedStatement update = connection.prepareStatement(
-                "UPDATE atlas_selector_delivery SET completed = TRUE WHERE player = ? AND operation_id = ?")) {
-            update.setString(1, player.toString()); update.setString(2, operation.toString()); update.executeUpdate();
-        }
-    }
 }

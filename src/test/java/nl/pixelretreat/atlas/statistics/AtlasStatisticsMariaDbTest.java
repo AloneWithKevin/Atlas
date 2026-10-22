@@ -56,20 +56,25 @@ final class AtlasStatisticsMariaDbTest {
         Matcher url = PRIVATE_FIXTURE_URL.matcher(configured);
         if (!url.matches()) throw new IllegalStateException("ATLAS_TEST_JDBC_URL must target the guarded loopback atlas_audit fixture");
         fixturePort = Integer.parseInt(url.group(1));
-        String sharedPort = System.getenv("LOGBOOK_TEST_DB_PORT");
-        String sharedSchema = System.getenv("LOGBOOK_TEST_DB_SCHEMA");
-        String dataDirectory = System.getenv("LOGBOOK_TEST_DB_DATADIR");
-        if (!Integer.toString(fixturePort).equals(sharedPort)
-                || !"logbook_website_dashboard_test".equals(sharedSchema)
-                || dataDirectory == null || dataDirectory.isBlank())
-            throw new IllegalStateException("Atlas SQL tests require the shared guarded private fixture identity");
-        fixtureDataDirectory = Path.of(dataDirectory).toRealPath();
+        if (!"true".equals(System.getenv("ATLAS_TEST_DB"))
+                || !Integer.toString(fixturePort).equals(System.getenv("ATLAS_TEST_PORT")))
+            throw new IllegalStateException("Atlas SQL tests require the explicitly enabled private fixture port");
         fixtureUser = System.getenv().getOrDefault("ATLAS_TEST_DB_USER", "root");
         fixturePassword = System.getenv().getOrDefault("ATLAS_TEST_DB_PASSWORD", "");
         if (!"root".equals(fixtureUser)) throw new IllegalStateException("Private audit fixture must use its local root account");
 
         String adminUrl = "jdbc:mariadb://127.0.0.1:" + fixturePort + "/?sslMode=disable";
         try (Connection admin = DriverManager.getConnection(adminUrl, fixtureUser, fixturePassword)) {
+            try (var statement = admin.createStatement(); var rows = statement.executeQuery("SELECT @@datadir")) {
+                if (!rows.next()) throw new IllegalStateException("Fixture directory unavailable");
+                fixtureDataDirectory = Path.of(rows.getString(1)).toRealPath();
+            }
+            Path root = Path.of(System.getProperty("pixelretreatWorkspace")).resolve(".development/fixtures").toRealPath();
+            Path owner = fixtureDataDirectory.getParent();
+            if (!fixtureDataDirectory.startsWith(root) || !fixtureDataDirectory.getFileName().toString().equals("data")
+                    || !owner.getParent().equals(root) || !owner.getFileName().toString().matches("[0-9a-f]{32}")
+                    || !java.nio.file.Files.isRegularFile(owner.resolve("owner.json")))
+                throw new IllegalStateException("Fixture directory is not owned by the root helper");
             verifyPrivateFixture(admin);
             try (var query = admin.prepareStatement("SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='atlas_audit'")) {
                 try (var rows = query.executeQuery()) {

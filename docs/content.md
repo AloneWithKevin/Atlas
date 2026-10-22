@@ -13,3 +13,5 @@ Atlas contains only the item and glyph definitions. Closet is the sole owner of 
 Atlas creates no custom block, machine, recipe, reward, GUI icon or preview item. A portal can be filled with an ordinary placeable block and the configured portal region restores the affected fill when removed; the fill is not a Closet item identity.
 
 The selector is not a survival-player tool. In-game confirmation should check its name/lore/glyph and corner-selection behavior after the matching Closet pack has been loaded.
+
+Selector issuance checks the original requester/target after asynchronous preparation and refuses while Compass owns the target inventory. It performs no selector intent SQL or saved-inventory proof. Unknown delivery needs investigation; joining never resumes a selector grant.

@@ -1,0 +1,3 @@
+revision: atlas-live-selector-20261022
+replace-if-equal:
+  selector.pending: "Your <#F3E5AB>Atlas selector</#F3E5AB> delivery is still unresolved. <#A8D5A2>Check your inventory</#A8D5A2> before trying again."

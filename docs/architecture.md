@@ -12,7 +12,7 @@ MariaDB is the shared `pixelretreat_veyra` database; Atlas rows are partitioned 
 
 ## Stored data
 
-Atlas stores world settings, flag overrides, portals, keep-loaded regions, pending lifecycle work, sealed copy evidence, travel tickets, selector-delivery pointers, and Logbook source journals in MariaDB. World files and generated datapack files remain under the server's normal world folder. Database credentials stay in the installed local `plugins/Atlas/config.yml`; repository defaults are blank and diagnostics redact credentials.
+Atlas stores world settings, flag overrides, portals, keep-loaded regions, pending lifecycle work, sealed copy evidence, travel tickets, historical selector-delivery pointers, and Logbook source journals in MariaDB. World files and generated datapack files remain under the server's normal world folder. Database credentials stay in the installed local `plugins/Atlas/config.yml`; repository defaults are blank and diagnostics redact credentials.
 
 ## Work ownership
 
@@ -49,3 +49,9 @@ Atlas registers `atlas:selector` and the selector lore glyph through Closet's pu
 ## Logbook
 
 Atlas exposes only the seven owner-approved metric groups through the Logbook provider contract. Durable facts use their original Atlas operation and transaction. The source enforces bounded collection and admission. The matching provider is build/test-only under this task; the dependent Atlas artifact is not eligible for deployment until matching provider deployment is authorized. Exact metric semantics and coverage are in [Logbook integration](logbook-integration.md).
+
+## Direct selector issuance
+
+`/atlas selector` captures the original requester and local target. Closet prepares the unchanged definition asynchronously, then the original requester permissions and actual target connection/Compass custody are checked again. Materialization and direct live inventory delivery run on that original player's Folia owner, inline when already owned. Only actual Market overflow business stock is stored; exact correlation, one applied unit and an empty remainder are required for success. No full inventory capture, saved proof, selector SQL intent, generic per-player busy map or reconnect/startup replay remains. Interrupted/unknown delivery gives ticket feedback and is never automatically reissued. Historical selector rows remain evidence only. Console can still issue to an explicit target; the target needs no admin permission.
+
+Compass is a current service dependency so hidden menu inventories cannot receive the selector. No menu is forcibly closed or restored for this staff command. World rules continue to read immutable live snapshots; portal travel tickets, chunk loading and world-copy recovery keep their separate functional storage and maintenance protections.

@@ -63,12 +63,12 @@ public final class AtlasCommand implements TabExecutor {
     /** Collaborators of the command; it is registered only once all of them are ready. */
     public record Services(AtlasConfig config, RulesService rules, WorldAdminService worlds,
                            TeleportService teleports, PortalService portals, KeepLoadedService keepLoaded,
-                           SelectionService selections, Function<Player, CompletableFuture<nl.pixelretreat.atlas.service.SelectorDeliveryService.Result>> giveSelector,
+                           SelectionService selections, java.util.function.BiFunction<CommandSender, Player, CompletableFuture<nl.pixelretreat.atlas.service.SelectorDeliveryService.Result>> giveSelector,
                            Supplier<CompletableFuture<Void>> reload, AtlasStatistics statistics) {
         public Services(AtlasConfig config, RulesService rules, WorldAdminService worlds,
                         TeleportService teleports, PortalService portals, KeepLoadedService keepLoaded,
                         SelectionService selections,
-                        Function<Player, CompletableFuture<nl.pixelretreat.atlas.service.SelectorDeliveryService.Result>> giveSelector,
+                        java.util.function.BiFunction<CommandSender, Player, CompletableFuture<nl.pixelretreat.atlas.service.SelectorDeliveryService.Result>> giveSelector,
                         Supplier<CompletableFuture<Void>> reload) {
             this(config, rules, worlds, teleports, portals, keepLoaded, selections, giveSelector, reload, null);
         }
@@ -391,7 +391,7 @@ public final class AtlasCommand implements TabExecutor {
             if (player == null) { messages.send(sender, "common.player-offline", Map.of("player", args[0])); return; }
         } else if (args.length == 0 && sender instanceof Player self) player = self;
         else { messages.send(sender, "help.lines"); return; }
-        s.giveSelector().apply(player).whenComplete((given, failure) -> {
+        s.giveSelector().apply(sender, player).whenComplete((given, failure) -> {
             String key = failure != null || given == null ? "selector.pending" : switch (given) {
                 case GIVEN -> "selector.given";
                 case OVERFLOW -> "selector.overflow";

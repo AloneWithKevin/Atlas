@@ -43,7 +43,8 @@ import nl.pixelretreat.atlas.world.WorldFolders;
 import nl.pixelretreat.campfire.api.CampfireDelivery;
 import nl.pixelretreat.campfire.api.CampfireMessages;
 import nl.pixelretreat.campfire.api.MessageCatalog;
-import nl.pixelretreat.closet.api.ClosetDeliveries;
+import nl.pixelretreat.closet.api.ClosetLiveItems;
+import nl.pixelretreat.compass.api.CompassApi;
 import nl.pixelretreat.closet.api.ClosetService;
 import nl.pixelretreat.closet.api.ContentRegistration;
 import nl.pixelretreat.postbox.api.PostboxBootstrapIdentity;
@@ -247,9 +248,10 @@ public final class AtlasPlugin extends JavaPlugin {
     private void install(AtlasConfig settings, RulesService rules, int attempt) {
         if (stopped.get() || !isEnabled()) return;
         CampfireDelivery delivery = getServer().getServicesManager().load(CampfireDelivery.class);
-        ClosetDeliveries deliveries = getServer().getServicesManager().load(ClosetDeliveries.class);
-        if (delivery == null || deliveries == null || deliveries.apiVersion() < 1) {
-            if (attempt >= CONTRACT_ATTEMPTS) { fail(new IllegalStateException("Campfire delivery or Closet deliveries unavailable")); return; }
+        ClosetLiveItems deliveries = getServer().getServicesManager().load(ClosetLiveItems.class);
+        CompassApi compass = getServer().getServicesManager().load(CompassApi.class);
+        if (delivery == null || deliveries == null || !deliveries.supportsTracedOverflow() || compass == null) {
+            if (attempt >= CONTRACT_ATTEMPTS) { fail(new IllegalStateException("Campfire delivery, Closet live items or Compass unavailable")); return; }
             getServer().getGlobalRegionScheduler().runDelayed(this, task -> install(settings, rules, attempt + 1), CONTRACT_INTERVAL_TICKS);
             return;
         }
@@ -270,7 +272,7 @@ public final class AtlasPlugin extends JavaPlugin {
             AtlasMessages messages = new AtlasMessages(this, Objects.requireNonNull(catalog), delivery);
             reportStartup(messages);
             SelectionService selections = new SelectionService();
-            SelectorDeliveryService selectors = new SelectorDeliveryService(this, repository, workers, deliveries);
+            SelectorDeliveryService selectors = new SelectorDeliveryService(this, closet, deliveries, compass);
             TeleportService teleports = new TeleportService(this, rules, settings);
             PortalService portals = new PortalService(this, repository, workers, settings, teleports, messages);
             portals.statistics(statistics);
@@ -285,14 +287,13 @@ public final class AtlasPlugin extends JavaPlugin {
                 getServer().getGlobalRegionScheduler().run(this, task -> {
                     if (stopped.get() || !isEnabled()) return;
                     getServer().getMessenger().registerOutgoingPluginChannel(this, "BungeeCord");
-                    PlayerListener players = new PlayerListener(this, rules, portals, selections, messages, selectors,
-                            statistics);
+                    PlayerListener players = new PlayerListener(this, rules, portals, selections, messages, statistics);
                     getServer().getPluginManager().registerEvents(players, this);
                     getServer().getPluginManager().registerEvents(new PortalListener(rules, portals, messages), this);
                     getServer().getPluginManager().registerEvents(new SelectorListener(closet, selections, messages), this);
                     getServer().getServicesManager().register(AtlasRules.class, rules, this, ServicePriority.Normal);
                     AtlasCommand command = new AtlasCommand(this, messages, new AtlasCommand.Services(settings, rules,
-                            worlds, teleports, portals, regions, selections, player -> selectors.request(player.getUniqueId()),
+                            worlds, teleports, portals, regions, selections, (requester, player) -> selectors.request(player, requester),
                             () -> reloadAll(rules, portals, regions), statistics));
                     Objects.requireNonNull(getCommand("atlas")).setExecutor(command);
                     Objects.requireNonNull(getCommand("atlas")).setTabCompleter(command);

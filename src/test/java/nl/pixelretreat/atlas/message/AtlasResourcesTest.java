@@ -127,6 +127,20 @@ class AtlasResourcesTest {
         }
     }
 
+    @Test void selectorTicketMigrationReplacesOnlyTheExactOldDefaultAndPreservesSecondStartCustomText() throws Exception {
+        var files = new nl.pixelretreat.campfire.catalog.CatalogFiles();
+        var defaults = files.read("Atlas", getClass().getResourceAsStream("/messages.yml").readAllBytes());
+        var migration = files.migration("Atlas", getClass().getResourceAsStream("/message-updates.yml").readAllBytes());
+        Path target = directory.resolve("messages.yml");
+        Files.writeString(target, "selector:\n  pending: \"Your <#F3E5AB>Atlas selector</#F3E5AB> delivery is still unresolved. <#A8D5A2>Check your inventory</#A8D5A2> before trying again.\"\n");
+        files.install(files.plan("Atlas", target, defaults, migration));
+        assertEquals(defaults.get("selector.pending"), files.read("Atlas", Files.readAllBytes(target)).get("selector.pending"));
+        String replaced = Files.readString(target).replace(defaults.get("selector.pending"), "Custom support instruction");
+        Files.writeString(target, replaced);
+        files.install(files.plan("Atlas", target, defaults, migration));
+        assertEquals("Custom support instruction", files.read("Atlas", Files.readAllBytes(target)).get("selector.pending"));
+    }
+
     @Test void shippedConfigIsCompleteApartFromCredentials() throws Exception {
         try (var input = getClass().getResourceAsStream("/config.yml")) {
             var yaml = YamlConfiguration.loadConfiguration(new InputStreamReader(input, StandardCharsets.UTF_8));

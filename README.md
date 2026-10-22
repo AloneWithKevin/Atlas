@@ -8,7 +8,7 @@ Worlds are dimensions declared in Atlas's data pack. Minecraft loads the declare
 
 The public Atlas rules API serves typed world flags and spawn decisions to integrations. Atlas also records the owner-approved, source-backed measurements through Logbook's public contract. The Atlas consumer release depends on the matching Logbook provider and must remain local until that provider is approved for deployment.
 
-Atlas requires Postbox, Campfire and Closet. It targets Veyra/Folia 26.3 and uses Java 25.
+Atlas requires Postbox, Campfire, Closet and Compass. Selector issuance is direct on the original local player owner; unknown delivery requires a support ticket and is never replayed on join. It targets Veyra/Folia 26.3 and uses Java 25.
 
 Build from the workspace root:
 

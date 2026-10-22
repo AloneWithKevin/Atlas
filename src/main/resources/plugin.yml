@@ -6,7 +6,7 @@ folia-supported: true
 load: POSTWORLD
 author: PixelRetreat
 description: Worlds, world rules, portals and keep-loaded regions
-depend: [Postbox, Campfire, Closet]
+depend: [Postbox, Campfire, Closet, Compass]
 commands:
   atlas:
     description: Manage worlds, world rules, portals and keep-loaded regions.
