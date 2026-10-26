@@ -62,7 +62,7 @@ public final class AtlasRepository {
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
-                lockStatistics(connection);
+                current.lockSourceForRecovery(connection);
                 try (PreparedStatement query = connection.prepareStatement(
                         "SELECT p.id, p.state, c.phase FROM atlas_pending_operation p "
                         + "JOIN atlas_logbook_world_operations o ON o.source_id = p.id "
@@ -538,7 +538,7 @@ public final class AtlasRepository {
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
-                lockStatistics(connection);
+                { AtlasStatistics current = statistics; if (current != null) current.lockWorldSource(connection, id); }
                 boolean completed = finish(connection, id, success, result);
                 connection.commit();
                 return completed;
@@ -575,7 +575,7 @@ public final class AtlasRepository {
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
-                lockStatistics(connection);
+                { AtlasStatistics current = statistics; if (current != null) current.lockWorldSource(connection, id); }
                 PendingOperation operation;
                 try (PreparedStatement query = connection.prepareStatement(
                         "SELECT * FROM atlas_pending_operation WHERE id = ? AND server = ? AND state = 'PENDING' FOR UPDATE")) {
@@ -724,7 +724,7 @@ public final class AtlasRepository {
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
-                lockStatistics(connection);
+                { AtlasStatistics current = statistics; if (current != null) current.lockWorldSource(connection, operation.id()); }
                 WorldCopyState state = copyState(connection, operation.id(), true).orElseThrow(
                         () -> new SQLException("Copy evidence missing"));
                 if (state.phase() != WorldCopyState.Phase.PUBLISHED) throw new SQLException("Copy not published");
@@ -751,7 +751,7 @@ public final class AtlasRepository {
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
-                lockStatistics(connection);
+                { AtlasStatistics current = statistics; if (current != null) current.lockWorldSource(connection, operation.id()); }
                 if (!setEnabled(connection, operation.world(), false)) throw new SQLException("Uncertain target row missing");
                 try (PreparedStatement update = connection.prepareStatement(
                         "UPDATE atlas_world_copy SET phase = 'UNCERTAIN' WHERE server = ? AND operation_id = ? "
@@ -994,6 +994,7 @@ public final class AtlasRepository {
     /** Creates a durable original root before a local teleport can touch PlayerState. */
     public void startLocalPortalTrip(UUID operation, UUID player, String portal, String sourceWorld,
                                      String targetWorld) throws SQLException {
+        if (statistics != null && !statistics.capturesPortalTrips()) return;
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
@@ -1011,10 +1012,11 @@ public final class AtlasRepository {
 
     /** Finishes only a known current portal outcome; an absent original root remains unimported. */
     public void finishPortalTrip(UUID operation, String outcome) throws SQLException {
+        if (statistics != null && !statistics.retainsPortal(operation)) return;
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
-                lockStatistics(connection);
+                { AtlasStatistics current = statistics; if (current != null) current.lockPortalSource(connection, operation); }
                 AtlasStatistics current = statistics;
                 if (current != null) current.finishPortalTrip(connection, operation, outcome);
                 connection.commit();
@@ -1027,10 +1029,11 @@ public final class AtlasRepository {
 
     /** Keeps terminal/duration holds when the external teleport outcome cannot be proven. */
     public void unresolvedPortalTrip(UUID operation, String cause) throws SQLException {
+        if (statistics != null && !statistics.retainsPortal(operation)) return;
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
-                lockStatistics(connection);
+                { AtlasStatistics current = statistics; if (current != null) current.lockPortalSource(connection, operation); }
                 AtlasStatistics current = statistics;
                 if (current != null) current.unresolvedPortalTrip(connection, operation, cause);
                 connection.commit();
@@ -1049,7 +1052,7 @@ public final class AtlasRepository {
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
-                lockStatistics(connection);
+                { AtlasStatistics current = statistics; if (current != null) current.lockPortalSource(connection, id); }
                 AtlasStatistics current = statistics;
                 boolean pending;
                 if (provenNotSent) {
@@ -1084,7 +1087,7 @@ public final class AtlasRepository {
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
-                lockStatistics(connection);
+                { AtlasStatistics current = statistics; if (current != null) current.lockPlayerPortalSource(connection, player); }
                 TravelTicket ticket;
                 Timestamp selectedCreatedAt;
                 try (PreparedStatement query = connection.prepareStatement("""

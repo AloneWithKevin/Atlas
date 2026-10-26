@@ -31,6 +31,21 @@ public final class AtlasWorkers implements AutoCloseable {
         return work.future;
     }
 
+    /** Optional telemetry yields to business work and never occupies a single-worker configuration. */
+    public CompletableFuture<Void> submitObservation(Callable<Void> task) {
+        var pool = (ThreadPoolExecutor) executor;
+        if (pool.getCorePoolSize() < 2) return CompletableFuture.completedFuture(null);
+        return submitRecovery(task);
+    }
+
+    /** Original admitted recovery may use an idle single worker; optional new observations may not. */
+    public CompletableFuture<Void> submitRecovery(Callable<Void> task) {
+        var pool = (ThreadPoolExecutor) executor;
+        if (pool.getActiveCount() != 0 || !pool.getQueue().isEmpty())
+            return CompletableFuture.completedFuture(null);
+        return submit(task);
+    }
+
     /** Rejects future submissions, settles dropped work and interrupts active calls. */
     @Override public void close() {
         for (Runnable dropped : executor.shutdownNow()) {

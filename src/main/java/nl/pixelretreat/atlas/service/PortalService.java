@@ -202,8 +202,11 @@ public final class PortalService {
         World world = plugin.getServer().getWorld(NamespacedKey.fromString(target.world()));
         UUID operation = UUID.randomUUID();
         CompletableFuture<Travel> result = new CompletableFuture<>();
-        workers.submit(() -> { repository.startLocalPortalTrip(operation, playerId, portal.name(),
-            sourceWorld, target.world()); return null; }).whenComplete((started, startFailure) -> {
+        var admission = statistics != null && !statistics.capturesPortalTrips()
+                ? CompletableFuture.<Void>completedFuture(null)
+                : workers.submit(() -> { repository.startLocalPortalTrip(operation, playerId, portal.name(),
+                    sourceWorld, target.world()); return (Void) null; });
+        admission.whenComplete((started, startFailure) -> {
             if (startFailure != null) {
                 recordAttempt(playerId, portal.name(), "refused", "statistics_admission");
                 result.complete(Travel.FAILED);
@@ -325,6 +328,7 @@ public final class PortalService {
     }
 
     private void finish(UUID operation, String outcome, Travel resultValue, CompletableFuture<Travel> result) {
+        if (statistics != null && !statistics.retainsPortal(operation)) { result.complete(resultValue); return; }
         workers.submit(() -> { repository.finishPortalTrip(operation, outcome); return null; })
                 .whenComplete((ignored, failure) -> {
                     if (failure != null) {
@@ -338,6 +342,7 @@ public final class PortalService {
 
     private void finishArrival(UUID operation, String outcome, Travel resultValue,
                                CompletableFuture<Optional<Travel>> result) {
+        if (statistics != null && !statistics.retainsPortal(operation)) { result.complete(Optional.of(resultValue)); return; }
         workers.submit(() -> { repository.finishPortalTrip(operation, outcome); return null; })
                 .whenComplete((ignored, failure) -> {
                     if (failure != null) {
@@ -350,6 +355,7 @@ public final class PortalService {
     }
 
     private void unresolved(UUID operation, String cause) {
+        if (statistics != null && !statistics.retainsPortal(operation)) return;
         workers.submit(() -> { repository.unresolvedPortalTrip(operation, cause); return null; }).exceptionally(failure -> {
             AtlasStatistics current = statistics;
             if (current != null) current.observeGap("portal_unresolved_gap_write_failed", "atlas_logbook_portal_trips",

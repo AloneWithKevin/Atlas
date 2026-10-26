@@ -6,6 +6,27 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 
 class AtlasWorkersTest {
+    @Test void optionalObservationsYieldToBusinessAndNeverUseTheOnlyWorker() throws Exception {
+        var ran=new AtomicBoolean();
+        try(var single=new AtlasWorkers(1,2)) {
+            single.submitObservation(()->{ran.set(true);return null;}).get(1,TimeUnit.SECONDS);
+            assertFalse(ran.get());
+            single.submitRecovery(()->{ran.set(true);return null;}).get(1,TimeUnit.SECONDS);
+            assertTrue(ran.get());ran.set(false);
+            assertEquals(7,single.submit(()->7).get(1,TimeUnit.SECONDS));
+        }
+        var entered=new CountDownLatch(1);var release=new CountDownLatch(1);
+        try(var workers=new AtlasWorkers(2,2)) {
+            var business=workers.submit(()->{entered.countDown();release.await();return 9;});
+            try {
+                assertTrue(entered.await(1,TimeUnit.SECONDS));
+                workers.submitObservation(()->{ran.set(true);return null;}).get(1,TimeUnit.SECONDS);
+                assertFalse(ran.get());
+                assertEquals(11,workers.submit(()->11).get(1,TimeUnit.SECONDS));
+            }finally{release.countDown();}
+            assertEquals(9,business.get(1,TimeUnit.SECONDS));
+        }
+    }
     @Test void shutdownSettlesQueuedWorkWithoutPretendingActiveWorkHasRetired() throws Exception {
         var entered = new CountDownLatch(1);
         var interrupted = new CountDownLatch(1);

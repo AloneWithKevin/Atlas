@@ -80,6 +80,8 @@ public final class AtlasPlugin extends JavaPlugin {
     private volatile ContentRegistration closetRegistration;
     private volatile KeepLoadedService keepLoaded;
     private volatile AtlasStatistics statistics;
+    private volatile nl.pixelretreat.atlas.statistics.WorldVisits worldVisits;
+    private final AtomicBoolean visitFlushQueued = new AtomicBoolean();
 
     /** Opens the database and runs queued folder work while no world is loaded yet. */
     @Override public void onLoad() {
@@ -214,6 +216,12 @@ public final class AtlasPlugin extends JavaPlugin {
                                     net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
                                             .serialize(registered.get("diagnostic.statistics"))));
                     sourceStatistics.attachWorker(task -> workers.submit(task));
+                    var visits = new nl.pixelretreat.atlas.statistics.WorldVisits(database, settings.logbookLimits(),
+                            backend, settings.workerQueueSize(), failure -> getLogger().warning(
+                            net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+                                    .serialize(registered.get("diagnostic.statistics"))));
+                    worldVisits = visits;
+                    sourceStatistics.worldVisitsOnly(visits);
                     statistics = sourceStatistics;
                     repository.statistics(sourceStatistics);
                     return workers.submit(() -> {
@@ -289,6 +297,8 @@ public final class AtlasPlugin extends JavaPlugin {
                     getServer().getMessenger().registerOutgoingPluginChannel(this, "BungeeCord");
                     PlayerListener players = new PlayerListener(this, rules, portals, selections, messages, statistics);
                     getServer().getPluginManager().registerEvents(players, this);
+                    getServer().getPluginManager().registerEvents(new nl.pixelretreat.atlas.listener.WorldVisitListener(worldVisits), this);
+                    for (var world : getServer().getWorlds()) worldVisits.available(RulesService.key(world), true);
                     getServer().getPluginManager().registerEvents(new PortalListener(rules, portals, messages), this);
                     getServer().getPluginManager().registerEvents(new SelectorListener(closet, selections, messages), this);
                     getServer().getServicesManager().register(AtlasRules.class, rules, this, ServicePriority.Normal);
@@ -310,6 +320,15 @@ public final class AtlasPlugin extends JavaPlugin {
                 AtlasWorkers current = workers;
                 if (current != null && !stopped.get()) current.submit(repository::purgeTickets).exceptionally(failure -> 0);
             }, 10, 60, TimeUnit.MINUTES);
+            getServer().getAsyncScheduler().runAtFixedRate(this, task -> {
+                AtlasWorkers current = workers;
+                if (current == null || stopped.get() || !visitFlushQueued.compareAndSet(false, true)) return;
+                var work = statistics.needsRetiredVisitRecovery()
+                        ? current.submitRecovery(() -> { statistics.reconcileRetiredVisits(); return null; })
+                        : current.submitObservation(() -> { worldVisits.flush(); return null; });
+                work
+                        .whenComplete((ignored, failure) -> visitFlushQueued.set(false));
+            }, 5, 5, TimeUnit.SECONDS);
         } catch (RuntimeException failure) {
             fail(failure);
         }
@@ -359,6 +378,7 @@ public final class AtlasPlugin extends JavaPlugin {
         getServer().getServicesManager().unregisterAll(this);
         if (keepLoaded != null) keepLoaded.releaseAll();
         if (statistics != null) statistics.closeCapture();
+        if (worldVisits != null) worldVisits.close();
         if (workers != null) workers.close();
         if (database != null) database.close();
         if (closetRegistration != null) closetRegistration.close();

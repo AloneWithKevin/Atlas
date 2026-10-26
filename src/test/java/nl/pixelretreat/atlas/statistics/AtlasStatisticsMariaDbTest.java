@@ -537,4 +537,231 @@ final class AtlasStatisticsMariaDbTest {
         } while (System.nanoTime() < deadline);
         return predicate.test(count(pool, sql, parameter));
     }
+    private HikariDataSource visitDatabase() {
+        assumeTrue(fixtureJdbcUrl != null, "Use the guarded private Atlas SQL fixture");
+        var config = new HikariConfig(); config.setJdbcUrl(fixtureJdbcUrl);
+        config.setUsername(fixtureUser); config.setPassword(fixturePassword); config.setMaximumPoolSize(4);
+        return new HikariDataSource(config);
+    }
+
+    @Test void visitsCountActualJoinsAndWorldChangesWithoutReadinessOrReplayDuplicates() throws Exception {
+        try (var db = visitDatabase()) {
+            var visits = new WorldVisits(db, ProducerLimits.APPROVED_START, "NA", 256, error -> {});
+            visits.initialize();
+            UUID player = UUID.randomUUID(), alreadyOnline = UUID.randomUUID();
+            visits.available("atlas:new_world", true);
+            visits.presence(alreadyOnline, "atlas:new_world");
+            visits.joined(player, "minecraft:overworld");
+            visits.joined(player, "minecraft:overworld");
+            visits.changed(player, "atlas:new_world");
+            visits.changed(player, "minecraft:overworld");
+            visits.flush(); visits.flush();
+            try (var c = db.getConnection()) { nl.pixelretreat.logbook.core.ProjectionSchema.initialize(c); }
+            var ingest = new nl.pixelretreat.logbook.core.IngestRepository(db); ingest.drain("atlas",100);
+            var reads = new nl.pixelretreat.logbook.core.ReadRepository(db,new nl.pixelretreat.logbook.core.ReadLimits(100,100,100,30));
+            var today = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.DAYS);
+            var result = reads.featureUsage(new nl.pixelretreat.logbook.api.FeatureUsageQuery(WorldVisits.VISITS.id(),1,
+                "world",today,today.plusSeconds(86400),Optional.empty(),0,100));
+            assertEquals(2,result.entries().size());
+            assertEquals(3,result.entries().stream().mapToLong(e -> e.uses().longValueExact()).sum());
+            assertTrue(result.entries().stream().allMatch(e -> e.users()==1));
+            assertEquals(nl.pixelretreat.logbook.api.StatisticValue.Status.STALE,result.status());
+            String php=System.getenv("LOGBOOK_TEST_PHP");assertNotNull(php,"Explicit private PHP test executable required");
+            Path script=Path.of(System.getProperty("pixelretreatWorkspace")).resolve("Logbook/website/tests/worlds.php");
+            var process=new ProcessBuilder(php,script.toString(),"mysql:host=127.0.0.1;port="+fixturePort
+                +";dbname="+ownedSchema+";charset=utf8mb4").redirectErrorStream(true).start();
+            boolean finished=process.waitFor(30,TimeUnit.SECONDS);if(!finished)process.destroyForcibly();
+            assertTrue(finished,"Bounded PHP report fixture");
+            String output=new String(process.getInputStream().readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
+            assertEquals(0,process.exitValue(),output);assertTrue(output.contains("native/PHP parity passed"),output);
+            visits.close(); visits.joined(UUID.randomUUID(),"atlas:new_world"); visits.flush();
+            assertEquals(0,ingest.drain("atlas",100).acknowledged());
+        }
+    }
+
+    @Test void optionalCaptureNeverPerformsOwnerSqlAndDropsAtItsFixedBound() throws Exception {
+        try (var db = visitDatabase()) {
+            var watched = org.mockito.Mockito.mock(javax.sql.DataSource.class);
+            org.mockito.Mockito.when(watched.getConnection()).thenAnswer(call -> db.getConnection());
+            var visits = new WorldVisits(watched,ProducerLimits.APPROVED_START,"NA",2,error -> {});
+            visits.initialize(); org.mockito.Mockito.clearInvocations(watched);
+            UUID player = UUID.randomUUID();
+            visits.joined(player,"minecraft:overworld");
+            long[] timings=new long[10000];
+            for (int i=0;i<timings.length;i++) {
+                long begin=System.nanoTime(); visits.changed(player,i%2==0?"atlas:one":"atlas:two");
+                timings[i]=System.nanoTime()-begin;
+            }
+            java.util.Arrays.sort(timings);
+            System.out.printf("Atlas saturated owner capture: p95=%d ns; p99=%d ns; no owner SQL.%n",timings[9499],timings[9899]);
+            visits.changed(player,"invalid world key");
+            org.mockito.Mockito.verifyNoInteractions(watched);
+            visits.flush();
+            try (var c=db.getConnection();var q=c.createStatement();var rows=q.executeQuery(
+                "SELECT COUNT(*) FROM logbook_outbox WHERE owner='atlas'")) {
+                rows.next(); assertEquals(2,rows.getInt(1));
+            }
+        }
+    }
+
+    @Test void retiredMeasurementsDoNotAcquireAdmissionOrSqlForNewEffects() throws Exception {
+        var db=org.mockito.Mockito.mock(javax.sql.DataSource.class);
+        var c=org.mockito.Mockito.mock(Connection.class);
+        var source=new AtlasStatistics(db,ProducerLimits.APPROVED_START,"NA",256,() -> {});
+        source.worldVisitsOnly(new WorldVisits(db,ProducerLimits.APPROVED_START,"NA",256,error -> {}));
+        source.lockSource(c);
+        assertNull(source.startWorldOperation(c,17,PendingOperation.Kind.DELETE,"atlas:old",null,UUID.randomUUID()));
+        assertEquals(0,source.startPortalTrip(c,UUID.randomUUID(),UUID.randomUUID(),"portal","minecraft:overworld","EU","atlas:other"));
+        source.finishPortalTrip(c,UUID.randomUUID(),"arrived");
+        source.observeAdmin(UUID.randomUUID(),"create","done"); source.currentKeepLoadedSnapshot(8,32);
+        source.requestDiagnosticFlush();
+        org.mockito.Mockito.verifyNoInteractions(db,c);
+    }
+
+    @Test void originalAdmittedPortalKeepsItsTerminalProofAfterRetirement() throws Exception {
+        try (var db=visitDatabase()) {
+            UUID original=UUID.randomUUID(),player=UUID.randomUUID();
+            var old=new AtlasStatistics(db,ProducerLimits.APPROVED_START,"NA",256,() -> {});
+            old.initialize(); old.beginCollection();
+            try (var c=db.getConnection()) {
+                c.setAutoCommit(false);old.lockSource(c);
+                old.startPortalTrip(c,original,player,"portal","minecraft:overworld","NA","atlas:old");c.commit();
+            }
+            var retired=new AtlasStatistics(db,ProducerLimits.APPROVED_START,"NA",256,() -> {});
+            retired.worldVisitsOnly(new WorldVisits(db,ProducerLimits.APPROVED_START,"NA",256,error -> {}));
+            retired.initialize();assertTrue(retired.retainsPortal(original));
+            try (var c=db.getConnection()) {
+                c.setAutoCommit(false); retired.lockPortalSource(c,original);
+                retired.finishPortalTrip(c,original,"arrived");c.commit();
+            }
+            try (var c=db.getConnection();var q=c.createStatement();var rows=q.executeQuery(
+                "SELECT reserved_count FROM logbook_producers WHERE owner='atlas'")) {
+                rows.next();assertEquals(0,rows.getLong(1));
+            }
+            try (var c=db.getConnection();var q=c.prepareStatement(
+                "SELECT terminal_outcome FROM atlas_logbook_portal_trips WHERE operation_id=?")) {
+                q.setString(1,original.toString());try(var rows=q.executeQuery()){assertTrue(rows.next());assertEquals("arrived",rows.getString(1));}
+            }
+        }
+    }
+
+    @Test void replacedPublisherCannotOverwriteTheNewIncarnation() throws Exception {
+        try(var db=visitDatabase()) {
+            var old=new WorldVisits(db,ProducerLimits.APPROVED_START,"NA",256,error->{});old.initialize();
+            old.joined(UUID.randomUUID(),"atlas:old");old.available("atlas:old",true);
+            var current=new WorldVisits(db,ProducerLimits.APPROVED_START,"NA",256,error->{});current.initialize();
+            current.available("atlas:new",true);current.joined(UUID.randomUUID(),"atlas:new");
+            current.flush();old.flush();
+            try(var c=db.getConnection();var q=c.createStatement();var rows=q.executeQuery("SELECT body FROM logbook_outbox WHERE owner='atlas'")) {
+                int count=0;while(rows.next()) {
+                    var fact=CanonicalCodec.decode(rows.getBytes(1),32768);
+                    assertEquals("atlas:new",fact.dimensions().get("world"));count++;
+                }
+                assertEquals(2,count);
+            }
+        }
+    }
+
+    @Test void optionalWriterTimesOutAndRestoresPoolStateWhileOwnersContinue() throws Exception {
+        try(var db=visitDatabase()) {
+            var visits=new WorldVisits(db,ProducerLimits.APPROVED_START,"NA",256,error->{});visits.initialize();
+            var player=UUID.randomUUID();visits.joined(player,"atlas:busy");
+            try(var c=db.getConnection()) {
+                c.setAutoCommit(false);
+                try(var q=c.createStatement()){q.executeQuery("SELECT owner FROM logbook_producers WHERE owner='atlas' FOR UPDATE").close();}
+                var finished=java.util.concurrent.CompletableFuture.runAsync(visits::flush);
+                for(int i=0;i<1000;i++)visits.changed(player,i%2==0?"atlas:a":"atlas:b");
+                finished.get(5,TimeUnit.SECONDS);c.rollback();
+            }
+            visits.flush();
+            try(var c=db.getConnection();var q=c.createStatement();var rows=q.executeQuery("SELECT @@SESSION.max_statement_time,@@SESSION.innodb_lock_wait_timeout")) {
+                rows.next();assertNotEquals(java.math.BigDecimal.ONE,rows.getBigDecimal(1));assertTrue(rows.getLong(2)>1);
+            }
+        }
+    }
+
+    @Test void failedPostcommitVerificationCannotReclaimAReplacement() throws Exception {
+        try(var db=visitDatabase()) {
+            var fail=new java.util.concurrent.atomic.AtomicBoolean(true);
+            var uncertain=org.mockito.Mockito.mock(javax.sql.DataSource.class);
+            org.mockito.Mockito.when(uncertain.getConnection()).thenAnswer(call->{
+                Connection actual=db.getConnection();
+                return java.lang.reflect.Proxy.newProxyInstance(Connection.class.getClassLoader(),new Class<?>[]{Connection.class},
+                    (proxy,method,arguments)->{
+                        if(method.getName().equals("prepareStatement") && ((String)arguments[0]).contains("SELECT d.body,d.fingerprint,p.maximum_bytes")
+                                && actual.getAutoCommit() && fail.compareAndSet(true,false))
+                            throw new SQLException("Independent policy acknowledgement unavailable");
+                        try{return method.invoke(actual,arguments);}catch(java.lang.reflect.InvocationTargetException e){throw e.getCause();}
+                    });
+            });
+            var old=new WorldVisits(uncertain,ProducerLimits.APPROVED_START,"NA",256,error->{});
+            assertThrows(SQLException.class,old::initialize);
+            var replacement=new WorldVisits(db,ProducerLimits.APPROVED_START,"NA",256,error->{});replacement.initialize();
+            String expected;
+            try(var c=db.getConnection();var q=c.createStatement();var r=q.executeQuery("SELECT incarnation FROM atlas_logbook_visit_generation WHERE backend='NA'")) {
+                r.next();expected=r.getString(1);
+            }
+            old.available("atlas:old",true);old.flush();
+            try(var c=db.getConnection();var q=c.createStatement();var r=q.executeQuery("SELECT incarnation FROM atlas_logbook_visit_generation WHERE backend='NA'")) {
+                r.next();assertEquals(expected,r.getString(1));
+            }
+        }
+    }
+
+    @Test void rolledBackWorldSampleIsResampledAfterCapacityReturns() throws Exception {
+        try(var db=visitDatabase()) {
+            var limits=new ProducerLimits(2,32768);
+            var visits=new WorldVisits(db,limits,"NA",256,error->{});visits.initialize();
+            var writer=new nl.pixelretreat.logbook.client.ProducerWriter(db,"atlas",2,32768);
+            try(var c=db.getConnection()) {
+                nl.pixelretreat.logbook.core.ProjectionSchema.initialize(c);c.setAutoCommit(false);
+                for(int i=0;i<2;i++) {
+                    UUID event=UUID.randomUUID();writer.append(c,new Fact(event,event,WorldVisits.VISITS.id(),1,
+                        UUID.randomUUID(),null,Instant.now(),"NA",BigInteger.ONE,java.util.Map.of("world","atlas:fill","reason","join")));
+                }c.commit();
+            }
+            visits.available("atlas:state",true);visits.flush();
+            visits.available("atlas:state",false);
+            new nl.pixelretreat.logbook.core.IngestRepository(db).drain("atlas",10);
+            visits.flush();
+            try(var c=db.getConnection();var q=c.createStatement();var r=q.executeQuery("SELECT body FROM logbook_outbox WHERE owner='atlas'")) {
+                assertTrue(r.next());var sample=CanonicalCodec.decode(r.getBytes(1),32768);
+                assertEquals(WorldVisits.WORLDS.id(),sample.metric());assertEquals(BigInteger.ZERO,sample.value());assertFalse(r.next());
+            }
+        }
+    }
+
+    @Test void oldOpenVisitBecomesUnknownWithoutInventingItsDuration() throws Exception {
+        try(var db=visitDatabase()) {
+            UUID player=UUID.randomUUID();
+            var old=new AtlasStatistics(db,ProducerLimits.APPROVED_START,"NA",256,()->{});old.initialize();old.beginCollection();
+            old.attachWorker(task->{try{return java.util.concurrent.CompletableFuture.completedFuture(task.call());}
+                catch(Exception error){return java.util.concurrent.CompletableFuture.failedFuture(error);}});
+            old.startVisit(player,"atlas:old","join");
+            var current=new AtlasStatistics(db,ProducerLimits.APPROVED_START,"NA",256,()->{});
+            current.worldVisitsOnly(new WorldVisits(db,ProducerLimits.APPROVED_START,"NA",256,error->{}));current.initialize();
+            current.reconcileRetiredVisits();current.reconcileRetiredVisits();
+            try(var c=db.getConnection();var q=c.createStatement();var r=q.executeQuery("SELECT state,ended_at FROM atlas_logbook_world_visits")) {
+                assertTrue(r.next());assertEquals("UNRESOLVED",r.getString(1));assertNull(r.getObject(2));
+            }
+            try(var c=db.getConnection();var q=c.createStatement();var r=q.executeQuery("SELECT reserved_count,pending_count FROM logbook_producers WHERE owner='atlas'")) {
+                r.next();assertEquals(1,r.getLong(1));assertEquals(1,r.getLong(2));
+            }
+        }
+    }
+
+    @Test void emptyOptionalRegistryCannotInventZeroVisits() throws Exception {
+        try(var db=visitDatabase()) {
+            var visits=new WorldVisits(db,ProducerLimits.APPROVED_START,"NA",256,error->{});visits.initialize();
+            try(var c=db.getConnection()){nl.pixelretreat.logbook.core.ProjectionSchema.initialize(c);}
+            var script=Path.of(System.getProperty("pixelretreatWorkspace")).resolve("Logbook/website/tests/worlds.php");
+            var process=new ProcessBuilder(System.getenv("LOGBOOK_TEST_PHP"),script.toString(),
+                "mysql:host=127.0.0.1;port="+fixturePort+";dbname="+ownedSchema+";charset=utf8mb4","empty")
+                .redirectErrorStream(true).start();
+            assertTrue(process.waitFor(30,TimeUnit.SECONDS));
+            String output=new String(process.getInputStream().readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
+            assertEquals(0,process.exitValue(),output);assertTrue(output.contains("stays unknown"),output);
+        }
+    }
+
 }

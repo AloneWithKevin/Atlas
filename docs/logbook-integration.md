@@ -1,5 +1,58 @@
 # Logbook integration for Atlas
 
+## Current visit-only policy — 26 October 2026
+
+New capture is limited to observed world visits. `atlas:world_visits` v1 is a
+BACKEND counter (`visits`, dimensions `world,reason`) carrying the original
+player/time and `reason=join` or `world_change`. Same-world duplicates are
+suppressed; readiness establishes presence without inventing a join. Quit clears
+the local presence guard. No duration is inferred. `atlas:world_available` v1 is
+a BACKEND snapshot (`worlds`, dimension `world`) from actual world load/unload
+observations. New world IDs appear without a Logbook/website content patch.
+These samples are last observations, not a complete current server census.
+
+`WorldVisits` enrolls permanent PARTIAL_EVENTS/SAMPLED_SNAPSHOT policy before
+capture. Missing observations remain unknown. Owner callbacks perform no SQL,
+encoding, file/network work or worker wait. The visit queue uses the existing
+configured worker queue bound, plus one retained batch of at most 64 facts.
+Presence entries share the configured bound; world state has a hard 256-ID cap.
+Overflow drops observations without refusing or repeating any player effect.
+
+Initialization is not awaited by gameplay startup. Every five seconds at most one
+optional job is admitted on existing Atlas workers,
+only while business work is idle. Single-worker configurations skip optional
+export. A flush writes at most 64 visits and 64 changed world samples; unchanged
+flushes perform no SQL. Lock/statement waits are limited to one second and pooled
+session state is restored. Retry retains original facts/IDs, including uncertain
+commits. Uncertain world samples are resolved against their original outbox/archive
+proof, then fresh state is reread; a rolled-back sample is never replayed as new
+current state. A per-backend incarnation fence rejects replaced publishers,
+including initialization retries after a lost verification acknowledgement.
+
+Pre-upgrade OPEN visit roots are reconciled in idle batches of at most 16 players.
+Their original gap IDs mark them UNRESOLVED; no end/duration is invented and the
+unknown duration reservation remains held. The check stops after the local roots
+are drained. The one-second SQL/network budget also covers optional initialization.
+
+New portal, world-management, keep-loaded, staff and gap analytics are retired.
+Old definitions and original admitted recovery remain. New operations acquire no
+legacy telemetry admission or producer lock; old world/portal roots keep their
+terminal proofs and reserved capacity. Incoming peer tickets are proved before
+source-row locking. No old UNKNOWN effects are deleted or fabricated. Native
+world operations, ticket custody and player-facing behavior remain unchanged.
+
+The matching bounded Logbook `featureUsage` read and aggregate staff world report
+show visits, unique visitors, exact mean/median fractions, repeat users and return
+on another day. The same EU/NA player counts once network-wide. Dynamic world
+samples may exist without a proven visit count; that is not zero usage. No Atlas
+UUIDs/coordinates are displayed. Existing date/backend filters and `stats` access
+remain. Java and PHP honor partial capture. A world-report failure is isolated.
+
+Matching Java and PHP readers are required before activation. Verification and
+delivery are separate: source/tests do not install a hosted website or runtime.
+
+## Historical contract and retained recovery
+
 Atlas owns Atlas statistics; Logbook archives, projects and reads those facts. The build does not add player-visible history or a second gameplay source.
 
 ## Capture and ingestion

@@ -91,8 +91,38 @@ public final class AtlasStatistics {
                 Set.of(portalAttempts, adminActions, observationGaps), diagnosticGaps, warning);
     }
 
+    private WorldVisits visitsOnly;
+    private final Set<UUID> retainedPortals = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final Set<Long> retainedWorlds = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private volatile boolean retiredVisitsDrained;
+    public boolean needsRetiredVisitRecovery() { return visitsOnly != null && !retiredVisitsDrained; }
+
+    /** Select the approved visit-only policy before initialization; the old source remains for admitted recovery. */
+    public void worldVisitsOnly(WorldVisits visits) { visitsOnly = java.util.Objects.requireNonNull(visits); }
+    public boolean capturesPortalTrips() { return visitsOnly == null; }
+    public boolean retainsPortal(UUID id) { return visitsOnly == null || retainedPortals.contains(id); }
     public String backend() { return backend; }
-    public void lockSource(Connection connection) throws SQLException { writer.lockSource(connection); }
+    public void lockSource(Connection connection) throws SQLException { if (visitsOnly == null) writer.lockSource(connection); }
+    public void lockSourceForRecovery(Connection connection) throws SQLException { writer.lockSource(connection); }
+    public void lockWorldSource(Connection connection, long id) throws SQLException {
+        if (visitsOnly == null || retainedWorlds.contains(id)) writer.lockSource(connection);
+    }
+    public void lockPortalSource(Connection connection, UUID id) throws SQLException {
+        if (retainsPortal(id)) writer.lockSource(connection);
+    }
+    /** Incoming tickets can have been admitted on an older peer; prove those roots before source-row locking. */
+    public void lockPlayerPortalSource(Connection connection, UUID player) throws SQLException {
+        if (visitsOnly == null) { writer.lockSource(connection); return; }
+        boolean retained = false;
+        try (var q = connection.prepareStatement("SELECT operation_id FROM " + PORTAL_ORIGINS
+                + " WHERE player_id=? AND terminal_at IS NULL")) {
+            q.setString(1, player.toString());
+            try (var rows = q.executeQuery()) {
+                while (rows.next()) { retainedPortals.add(UUID.fromString(rows.getString(1))); retained = true; }
+            }
+        }
+        if (retained) writer.lockSource(connection);
+    }
 
     public void initialize() throws SQLException {
         writer.initialize();
@@ -118,11 +148,22 @@ public final class AtlasStatistics {
         }
         for (MetricDefinition definition : durableDefinitions) writer.register(definition);
         diagnostics.initialize();
+        if (visitsOnly != null) {
+            try (var c = database.getConnection(); var q = c.createStatement()) {
+                try (var rows = q.executeQuery("SELECT operation_id FROM " + PORTAL_ORIGINS + " WHERE terminal_at IS NULL")) {
+                    while (rows.next()) retainedPortals.add(UUID.fromString(rows.getString(1)));
+                }
+                try (var rows = q.executeQuery("SELECT source_id FROM " + WORLD_ORIGINS + " WHERE terminal_at IS NULL")) {
+                    while (rows.next()) retainedWorlds.add(rows.getLong(1));
+                }
+            }
+        }
     }
 
     /** Begins facts for a newly committed pending operation using its real Atlas row ID and timestamp. */
     public UUID startWorldOperation(Connection connection, long sourceId, PendingOperation.Kind kind,
                                     String world, String sourceWorld, UUID actor) throws SQLException {
+        if (visitsOnly != null) return null;
         UUID operation = UUID.randomUUID();
         long acceptedAt;
         try (PreparedStatement query = connection.prepareStatement(
@@ -154,6 +195,7 @@ public final class AtlasStatistics {
 
     /** Writes a source-proven terminal outcome; ambiguous folder recovery emits a gap and keeps future holds. */
     public void finishWorldOperation(Connection connection, long sourceId, String outcome) throws SQLException {
+        if (visitsOnly != null && !retainedWorlds.contains(sourceId)) return;
         WorldOrigin origin = worldOrigin(connection, sourceId);
         if (origin == null) {
             // Recovery cannot reconstruct a pre-producer accepted time or action root.
@@ -207,6 +249,7 @@ public final class AtlasStatistics {
 
     /** Opens actual BACKEND coverage after the Postbox local node is ready. */
     public void beginCollection() throws SQLException {
+        if (visitsOnly != null) return;
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
@@ -225,6 +268,7 @@ public final class AtlasStatistics {
     /** Creates an original portal root and admits its mutually exclusive terminal states before travel begins. */
     public long startPortalTrip(Connection connection, UUID operation, UUID player, String portal,
                                 String sourceWorld, String targetBackend, String targetWorld) throws SQLException {
+        if (visitsOnly != null) return 0;
         String target = checkedBackend(targetBackend);
         long acceptedAt = databaseNow(connection);
         try (PreparedStatement insert = connection.prepareStatement("INSERT INTO " + PORTAL_ORIGINS
@@ -254,6 +298,7 @@ public final class AtlasStatistics {
 
     /** Logs actual ticket consumption on its destination backend in the original claim transaction. */
     public void portalTicketConsumed(Connection connection, UUID operation, UUID player) throws SQLException {
+        if (!retainsPortal(operation)) return;
         PortalOrigin origin = portalOrigin(connection, operation, true);
         if (origin == null) {
             LegacyTicketOrigin legacy = legacyTicketOrigin(connection, operation);
@@ -284,6 +329,7 @@ public final class AtlasStatistics {
 
     /** A proven route terminal consumes its original holds; malformed elapsed time becomes a visible gap. */
     public void finishPortalTrip(Connection connection, UUID operation, String outcome) throws SQLException {
+        if (!retainsPortal(operation)) return;
         String terminalOutcome = checkedOutcome(outcome);
         PortalOrigin origin = portalOrigin(connection, operation, true);
         if (origin == null) {
@@ -310,6 +356,7 @@ public final class AtlasStatistics {
 
     /** Marks an ambiguous portal effect without consuming terminal/duration admission. */
     public void unresolvedPortalTrip(Connection connection, UUID operation, String cause) throws SQLException {
+        if (!retainsPortal(operation)) return;
         PortalOrigin origin = portalOrigin(connection, operation, true);
         if (origin == null) {
             LegacyTicketOrigin legacy = legacyTicketOrigin(connection, operation);
@@ -323,6 +370,11 @@ public final class AtlasStatistics {
 
     /** Starts an observed world interval. It measures from this proof point; it never invents a join session. */
     public void startVisit(UUID player, String world, String startReason) {
+        if (visitsOnly != null) {
+            if ("readiness_observation".equals(startReason)) visitsOnly.presence(player, world);
+            else visitsOnly.joined(player, world);
+            return;
+        }
         if (captureClosed.get()) return;
         Instant observedAt = clock.instant();
         UUID observation = UUID.randomUUID();
@@ -346,6 +398,7 @@ public final class AtlasStatistics {
 
     /** Ends the previous interval and begins the destination interval atomically at a world change. */
     public void rotateVisit(UUID player, String world) {
+        if (visitsOnly != null) { visitsOnly.changed(player, world); return; }
         if (captureClosed.get()) return;
         Instant observedAt = clock.instant();
         UUID observation = UUID.randomUUID();
@@ -368,6 +421,7 @@ public final class AtlasStatistics {
     }
 
     public void endVisit(UUID player, String endReason) {
+        if (visitsOnly != null) { visitsOnly.quit(player); return; }
         if (captureClosed.get()) return;
         Instant observedAt = clock.instant();
         UUID observation = observedVisits.remove(player);
@@ -389,18 +443,21 @@ public final class AtlasStatistics {
 
     /** Reports an accepted current observation for staff operations that have no durable timed source row. */
     public void observeAdmin(UUID actor, String action, String outcome) {
+        if (visitsOnly != null) return;
         diagnostics.aggregate(adminActions, actor, BigInteger.ONE,
                 dims("action", checkedToken(action), "outcome", checkedToken(outcome)));
         requestDiagnosticFlush();
     }
 
     public void observePortalAttempt(UUID actor, String portal, String outcome, String reason) {
+        if (visitsOnly != null) return;
         diagnostics.aggregate(portalAttempts, actor, BigInteger.ONE,
                 dims("portal", portal, "outcome", checkedToken(outcome), "reason", checkedToken(reason)));
         requestDiagnosticFlush();
     }
 
     public void observeGap(String cause, String source, String kind, UUID actor) {
+        if (visitsOnly != null) return;
         diagnostics.aggregate(observationGaps, actor, BigInteger.ONE,
                 dims("cause", checkedToken(cause), "source", checkedToken(source), "kind", checkedToken(kind)));
         requestDiagnosticFlush();
@@ -408,6 +465,7 @@ public final class AtlasStatistics {
 
     /** Current-state keep-loaded observation, after the existing Folia ticket reconciliation completed. */
     public void currentKeepLoadedSnapshot(int configuredRegions, int heldTickets) {
+        if (visitsOnly != null) return;
         if (!capture("snapshot_capture_full", null)) return;
         synchronized (snapshotLock) {
             snapshotTail = snapshotTail.handle((ignored, failure) -> null).thenCompose(ignored -> sourceSubmitter.apply(() -> {
@@ -438,6 +496,7 @@ public final class AtlasStatistics {
     }
 
     public void requestDiagnosticFlush() {
+        if (visitsOnly != null) return;
         submitSource(() -> { diagnostics.flush(); return null; });
     }
 
@@ -492,14 +551,35 @@ public final class AtlasStatistics {
         }
     }
 
+    /** Small idle-worker retirement batch; original gap identity is consumed, unknown duration remains held. */
+    public void reconcileRetiredVisits() throws SQLException {
+        if (visitsOnly == null || captureClosed.get() || retiredVisitsDrained) return;
+        try (var c = WorldVisits.bounded(database).getConnection()) {
+            c.setAutoCommit(false);
+            try {
+                writer.lockSource(c);
+                var players = new java.util.ArrayList<UUID>();
+                try (var q = c.prepareStatement("SELECT DISTINCT player_id FROM " + VISITS
+                        + " WHERE source_backend=? AND state='OPEN' LIMIT 16")) {
+                    q.setString(1, backend); try (var rows=q.executeQuery()) { while(rows.next()) players.add(UUID.fromString(rows.getString(1))); }
+                }
+                for (var player : players) markOpenVisitUnresolved(c,player,"visit_capture_retired");
+                c.commit();
+                if (players.size() < 16) retiredVisitsDrained = true;
+            } catch (SQLException | RuntimeException error) { c.rollback(); throw error; }
+        }
+    }
     private void markOpenVisitUnresolved(Connection connection, UUID player) throws SQLException {
+        markOpenVisitUnresolved(connection,player,"visit_interrupted_by_restart");
+    }
+    private void markOpenVisitUnresolved(Connection connection, UUID player, String cause) throws SQLException {
         try (PreparedStatement query = connection.prepareStatement("SELECT operation_id, source_backend FROM " + VISITS
                 + " WHERE player_id = ? AND source_backend = ? AND state = 'OPEN' FOR UPDATE")) {
             query.setString(1, player.toString()); query.setString(2, backend);
             try (ResultSet row = query.executeQuery()) {
                 while (row.next()) {
                     UUID operation = UUID.fromString(row.getString(1)); String origin = row.getString(2);
-                    appendGap(connection, operation, player, "visit_interrupted_by_restart", "atlas_logbook_world_visits",
+                    appendGap(connection, operation, player, cause, "atlas_logbook_world_visits",
                             "world_visit", origin, eventId(operation, GAPS, "interrupted-gap", player));
                     try (PreparedStatement update = connection.prepareStatement("UPDATE " + VISITS
                             + " SET state = 'UNRESOLVED' WHERE operation_id = ? AND state = 'OPEN'")) {
