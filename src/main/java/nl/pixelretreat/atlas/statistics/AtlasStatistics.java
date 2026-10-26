@@ -99,6 +99,8 @@ public final class AtlasStatistics {
 
     /** Select the approved visit-only policy before initialization; the old source remains for admitted recovery. */
     public void worldVisitsOnly(WorldVisits visits) { visitsOnly = java.util.Objects.requireNonNull(visits); }
+    /** This non-live statistics round starts at the new build; no historical capture is reconciled. */
+    public void freshWorldVisits(WorldVisits visits) { worldVisitsOnly(visits); retiredVisitsDrained = true; }
     public boolean capturesPortalTrips() { return visitsOnly == null; }
     public boolean retainsPortal(UUID id) { return visitsOnly == null || retainedPortals.contains(id); }
     public String backend() { return backend; }

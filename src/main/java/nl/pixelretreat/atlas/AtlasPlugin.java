@@ -221,15 +221,9 @@ public final class AtlasPlugin extends JavaPlugin {
                             net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
                                     .serialize(registered.get("diagnostic.statistics"))));
                     worldVisits = visits;
-                    sourceStatistics.worldVisitsOnly(visits);
+                    sourceStatistics.freshWorldVisits(visits);
                     statistics = sourceStatistics;
-                    repository.statistics(sourceStatistics);
-                    return workers.submit(() -> {
-                        sourceStatistics.initialize();
-                        sourceStatistics.beginCollection();
-                        repository.reconcileWorldStatistics();
-                        return null;
-                    });
+                    return CompletableFuture.completedFuture(null);
                 })
                 .thenCompose(ignored -> items.registerWithClosetAssets(this).toCompletableFuture())
                 .thenCompose(registration -> {

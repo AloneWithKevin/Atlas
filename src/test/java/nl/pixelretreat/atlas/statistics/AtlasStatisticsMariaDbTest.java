@@ -618,6 +618,14 @@ final class AtlasStatisticsMariaDbTest {
         org.mockito.Mockito.verifyNoInteractions(db,c);
     }
 
+    @Test void freshBuildDoesNotScheduleHistoricalVisitReconciliation() {
+        var db=org.mockito.Mockito.mock(javax.sql.DataSource.class);
+        var source=new AtlasStatistics(db,ProducerLimits.APPROVED_START,"NA",256,()->{});
+        source.freshWorldVisits(new WorldVisits(db,ProducerLimits.APPROVED_START,"NA",256,error->{}));
+        assertFalse(source.needsRetiredVisitRecovery());assertFalse(source.capturesPortalTrips());
+        assertFalse(source.retainsPortal(UUID.randomUUID()));org.mockito.Mockito.verifyNoInteractions(db);
+    }
+
     @Test void originalAdmittedPortalKeepsItsTerminalProofAfterRetirement() throws Exception {
         try (var db=visitDatabase()) {
             UUID original=UUID.randomUUID(),player=UUID.randomUUID();
