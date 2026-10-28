@@ -91,12 +91,13 @@ public final class AtlasRepository {
             statement.execute("""
                     CREATE TABLE IF NOT EXISTS atlas_world (
                       server VARCHAR(8) NOT NULL, world VARCHAR(100) NOT NULL, generator VARCHAR(16) NULL,
-                      enabled BOOLEAN NOT NULL, reset_source VARCHAR(100) NULL,
+                      enabled BOOLEAN NOT NULL, closed BOOLEAN NOT NULL DEFAULT FALSE, reset_source VARCHAR(100) NULL,
                       spawn_x DOUBLE NULL, spawn_y DOUBLE NULL, spawn_z DOUBLE NULL,
                       spawn_yaw FLOAT NULL, spawn_pitch FLOAT NULL,
                       difficulty VARCHAR(16) NULL, game_mode VARCHAR(16) NULL, fixed_time BIGINT NULL,
                       weather VARCHAR(16) NULL, created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
                       PRIMARY KEY (server, world))""");
+            statement.execute("ALTER TABLE atlas_world ADD COLUMN IF NOT EXISTS closed BOOLEAN NOT NULL DEFAULT FALSE");
             statement.execute("""
                     CREATE TABLE IF NOT EXISTS atlas_world_flag (
                       server VARCHAR(8) NOT NULL, world VARCHAR(100) NOT NULL, flag VARCHAR(32) NOT NULL,
@@ -195,7 +196,7 @@ public final class AtlasRepository {
                 Optional.ofNullable(rows.getString("reset_source")), spawn,
                 optionalEnum(rows.getString("difficulty"), Difficulty.class),
                 optionalEnum(rows.getString("game_mode"), GameMode.class), Optional.ofNullable(fixedTime),
-                optionalEnum(rows.getString("weather"), WeatherMode.class), flags);
+                optionalEnum(rows.getString("weather"), WeatherMode.class), flags, rows.getBoolean("closed"));
     }
 
     private static <E extends Enum<E>> Optional<E> optionalEnum(String value, Class<E> type) throws SQLException {
@@ -241,6 +242,27 @@ public final class AtlasRepository {
         }
     }
 
+    /** Runtime loading must not reopen a world whose queued copy/delete owns its files. */
+    public boolean lifecycleBlocked(String key, boolean enabling) throws SQLException {
+        try (Connection connection = database.getConnection()) {
+            try (PreparedStatement query = connection.prepareStatement(
+                    "SELECT 1 FROM atlas_world_copy WHERE server = ? AND world = ? "
+                            + "AND phase NOT IN ('APPLIED', 'CANCELLED') LIMIT 1")) {
+                query.setString(1, server); query.setString(2, key);
+                try (ResultSet rows = query.executeQuery()) { if (rows.next()) return true; }
+            }
+            if (enabling) {
+                try (PreparedStatement query = connection.prepareStatement(
+                        "SELECT 1 FROM atlas_pending_operation WHERE server = ? AND world = ? "
+                                + "AND kind = 'DELETE' AND state = 'PENDING' LIMIT 1")) {
+                    query.setString(1, server); query.setString(2, key);
+                    try (ResultSet rows = query.executeQuery()) { return rows.next(); }
+                }
+            }
+            return false;
+        }
+    }
+
     private boolean setEnabled(Connection connection, String key, boolean enabled) throws SQLException {
         try (PreparedStatement update = connection.prepareStatement(
                 "UPDATE atlas_world SET enabled = ? WHERE server = ? AND world = ? AND generator IS NOT NULL")) {
@@ -248,6 +270,26 @@ public final class AtlasRepository {
             update.setString(2, server);
             update.setString(3, key);
             return update.executeUpdate() == 1;
+        }
+    }
+
+    /** Sets or clears ({@code null}) one flag override. */
+    public void setClosed(String key, boolean closed) throws SQLException {
+        try (Connection connection = database.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                ensureWorldRow(connection, key);
+                lockWorld(connection, key);
+                requireCopyUnlocked(connection, key);
+                try (PreparedStatement update = connection.prepareStatement(
+                        "UPDATE atlas_world SET closed = ? WHERE server = ? AND world = ?")) {
+                    update.setBoolean(1, closed);
+                    update.setString(2, server);
+                    update.setString(3, key);
+                    if (update.executeUpdate() != 1) throw new SQLException("World access row missing");
+                }
+                connection.commit();
+            } catch (SQLException | RuntimeException failure) { connection.rollback(); throw failure; }
         }
     }
 

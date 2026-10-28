@@ -8,7 +8,9 @@ A portal can take you to a world's spawn, a saved location, or the matching worl
 
 The configured portal cooldown applies after a route attempt. Its exact value can differ by portal. Restricted portals also require permission granted by staff.
 
-Atlas can teleport you to a loaded world using staff tools. It does not load a destination world on demand. A newly created or enabled world becomes available after a server start; a clone or reset can take a preparation start and a later activation start.
+Atlas can teleport you to a loaded world using staff tools. It does not load a destination world on demand. Staff can enable an existing initialized world while the server runs. A newly generated world requires startup; a clone or reset can take a preparation start and a later activation start.
+
+A world can remain loaded for staff while closed to ordinary players. Closing sends ordinary players already inside to the configured local spawn. Staff can reopen access without restarting.
 
 ## World rules
 

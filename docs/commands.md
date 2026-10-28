@@ -10,15 +10,16 @@ World names contain 1–48 lowercase letters, numbers, underscores or hyphens. W
 | --- | --- |
 | `/atlas world list` | Lists worlds and their loaded/enabled state and generator. |
 | `/atlas world create <name> <generator>` | Declares a new dimension using `normal`, `flat`, `void`, `nether` or `end`; it loads after the next start. Existing folders are refused. |
-| `/atlas world import <name> <generator>` | Declares an existing folder under `<level>/dimensions/atlas/<name>`; the generator applies to new chunks. |
-| `/atlas world enable <world>` / `disable <world>` | Changes whether an Atlas dimension is declared for the next start. Disable is refused while portals or keep-loaded regions refer to the world. |
+| `/atlas world import <name> <generator>` | Declares an existing standalone dimension or complete native save under `<level>/dimensions/atlas/<name>`. Complete saves retain their source generator and metadata; use enable to load an initialized imported save at runtime. |
+| `/atlas world enable <world>` / `disable <world>` | Loads or safely unloads an existing initialized Atlas world immediately, and persists the startup declaration. Disable refuses players, unfinished transitions, portals, keep-loaded regions and active external tickets. A drain timeout keeps the original instance; an uncertain partial close must be investigated. |
+| `/atlas world close <world>` / `open <world>` | Close persists staff-only access, blocks ordinary entries and evacuates ordinary players to the configured local Toolbox `/spawn`. Staff with `atlas.world.closed.bypass` remain. Open restores ordinary access without reloading. Missing/closed spawn refuses close before changing access. |
 | `/atlas world delete <world> confirm` | Queues folder deletion for startup. Vanilla worlds and worlds with portal/region references are refused; references are checked again immediately before removal. |
 | `/atlas world clone <source> <name>` | Prepares a verified copy on the next start, then activates it on a later start. The source may be any world with a folder. |
 | `/atlas world reset <world> [source] confirm` | Prepares and verifies a replacement; the original is retained. The existing reset source is used when omitted. |
 | `/atlas world pending` | Shows queued operations. It is not a history of terminal receipts. |
 | `/atlas world cancel <id>` | Cancels an operation only while its stored phase permits cancellation, restoring the prior declaration as applicable. |
 
-New/imported/enabled/disabled worlds are applied after a server start. Clone/reset may require separate preparation and activation starts. A proven sealed copy may resume after interruption; changed or incomplete evidence remains uncertain and is not overwritten or discarded. See [world recovery](world-recovery.md).
+Newly generated worlds require startup; initialized imported or disabled worlds can be enabled while running. Enable/disable and close/open are separate operations. Clone/reset may require separate preparation and activation starts. A proven sealed copy may resume after interruption; changed or incomplete evidence remains uncertain and is not overwritten or discarded. See [world recovery](world-recovery.md).
 
 ## Information and travel
 

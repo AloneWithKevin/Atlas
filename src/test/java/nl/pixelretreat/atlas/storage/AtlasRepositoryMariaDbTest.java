@@ -46,6 +46,13 @@ final class AtlasRepositoryMariaDbTest {
 
             assertTrue(repository.insertWorld("atlas:arena", WorldGenerator.VOID, Optional.empty()));
             assertFalse(repository.insertWorld("atlas:arena", WorldGenerator.FLAT, Optional.empty()));
+            repository.setClosed("atlas:arena", true);
+            repository.setClosed("atlas:arena", true);
+            assertTrue(repository.loadWorlds().get("atlas:arena").closed());
+            repository.initialize();
+            assertTrue(repository.loadWorlds().get("atlas:arena").closed(), "schema migration preserves closed access");
+            repository.setClosed("atlas:arena", false);
+            assertFalse(repository.loadWorlds().get("atlas:arena").closed());
             repository.setFlag("minecraft:overworld", AtlasFlag.PVP, false);
             repository.setFlag("atlas:arena", AtlasFlag.BLOCK_BREAK, true);
             repository.setFlag("atlas:arena", AtlasFlag.BLOCK_BREAK, null);

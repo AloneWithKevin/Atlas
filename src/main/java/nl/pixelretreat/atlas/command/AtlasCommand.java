@@ -52,7 +52,7 @@ public final class AtlasCommand implements TabExecutor {
     public static final String ADMIN = "atlas.admin";
     private static final List<String> ROOT = List.of("help", "world", "info", "tp", "spawn", "setspawn", "flag",
             "set", "selector", "portal", "keeploaded", "reload");
-    private static final List<String> WORLD = List.of("list", "create", "import", "enable", "disable", "delete",
+    private static final List<String> WORLD = List.of("list", "create", "import", "enable", "disable", "close", "open", "delete",
             "clone", "reset", "pending", "cancel");
     private static final List<String> PORTAL = List.of("create", "delete", "list", "info", "target", "cooldown",
             "sound", "particle", "restrict", "fill");
@@ -130,6 +130,11 @@ public final class AtlasCommand implements TabExecutor {
                 if (args.length != 2) { messages.send(sender, "usage.world"); return; }
                 worldKey(sender, args[1]).ifPresent(key -> report(sender, s.worlds().setEnabled(key, action.equals("enable")),
                         action.equals("enable") ? "world.enabled" : "world.disabled", key, null, "world_" + action));
+            }
+            case "close", "open" -> {
+                if (args.length != 2) { messages.send(sender, "usage.world"); return; }
+                worldKey(sender, args[1]).ifPresent(key -> report(sender, s.worlds().setClosed(key, action.equals("close")),
+                        action.equals("close") ? "world.closed" : "world.opened", key, null, "world_" + action));
             }
             case "delete" -> {
                 if (args.length != 3 || !args[2].equalsIgnoreCase("confirm")) {
@@ -722,7 +727,7 @@ public final class AtlasCommand implements TabExecutor {
             };
             case 3 -> switch (first) {
                 case "world" -> switch (args[1].toLowerCase(Locale.ROOT)) {
-                    case "enable", "disable", "delete", "clone", "reset" -> worlds;
+                    case "enable", "disable", "close", "open", "delete", "clone", "reset" -> worlds;
                     default -> List.of();
                 };
                 case "tp", "spawn" -> plugin.getServer().getOnlinePlayers().stream().map(Player::getName).toList();

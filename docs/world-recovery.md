@@ -2,7 +2,7 @@
 
 ## When operations run
 
-World registry data is read before plugins start. Atlas therefore writes the generated data pack and queues the operation in MariaDB when an administrator changes the declared world set, but performs directory changes during `onLoad`, before world loading. Create/import/enable/disable changes need the next server start. Clone and reset require a preparation start and a later activation start. A stale data-pack declaration may require another start before a folder can be touched. Atlas does not create or unload worlds at runtime.
+World registry data is read before plugins start. Atlas therefore writes the generated data pack and queues the operation in MariaDB when an administrator changes the declared world set, but performs directory changes during `onLoad`, before world loading. Creation and first terrain generation need startup; initialized imported saves can be enabled immediately. Runtime enable/disable uses Veyra's original-instance admission, natural chunk drain and verified IO closure, then persists the matching startup declaration. A persistence failure after a runtime operation reports UNKNOWN instead of claiming success. Clone and reset require a preparation start and a later activation start. A stale data-pack declaration may require another start before a folder can be touched. Runtime enable/disable does not perform queued clone/reset/delete directory changes.
 
 ## Durable evidence and phases
 
@@ -23,3 +23,9 @@ Startup traversal streams entries and caps outstanding file tasks at `workers.th
 ## Startup failure
 
 Before Campfire is available, Atlas has a bundled generic console failure message. Startup failure logs one short diagnostic and disables Atlas. It does not expose exceptions or database credentials to players.
+
+## Complete native saves and replacement
+
+Copy the complete save folder intact to `<level>/dimensions/atlas/<name>`. A current native save with `level.dat` and `dimensions/minecraft/overworld`, `the_nether` or `the_end` is mounted at the selected source dimension; an existing standalone Atlas dimension folder remains supported. The outer folder name/key remains unchanged. Source terrain settings and spawn metadata are retained. No player inventory or scoreboard is implicitly imported. Duplicate loaded UUIDs and overlapping physical mounts are refused.
+
+Before replacing files while the server runs, move everyone out, remove world references/tickets as reported, and obtain a successful `/atlas world disable <world>`. Close alone leaves writers active and is insufficient. Do not replace files after UNKNOWN or a failed/incomplete unload. After copying, `/atlas world enable <world>` loads the replacement; features bound to the prior UUID require their owning plugin's explicit world setup.

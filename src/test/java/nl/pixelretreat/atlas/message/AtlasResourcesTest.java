@@ -168,7 +168,8 @@ class AtlasResourcesTest {
                     entry.getKey() + " must preserve every plain input value");
             Set<TextColor> palette = entry.getKey().startsWith("items.")
                     ? Set.of(TextColor.color(0xFFFFFF), TextColor.color(0xF3E5AB), TextColor.color(0xA8D5A2))
-                    : Set.of(TextColor.color(0xF3E5AB), TextColor.color(0xA8D5A2));
+                    : Set.of(TextColor.color(0xF3E5AB), TextColor.color(0xA8D5A2),
+                            TextColor.color(0xFFFFFF), TextColor.color(0xD9534F));
             checkPalette(rendered, palette, entry.getKey());
         }
     }

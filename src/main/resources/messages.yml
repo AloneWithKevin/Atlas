@@ -21,14 +21,14 @@ common:
 help:
   lines: |-
     <#F3E5AB>Atlas</#F3E5AB>
-    <#A8D5A2>/atlas world</#A8D5A2> <#A8D5A2>list, create, import, enable, disable, delete, clone, reset, pending, cancel</#A8D5A2>
+    <#A8D5A2>/atlas world</#A8D5A2> <#A8D5A2>list, create, import, enable, disable, close, open, delete, clone, reset, pending, cancel</#A8D5A2>
     <#A8D5A2>/atlas info {world}</#A8D5A2> — state, settings and flags
     <#A8D5A2>/atlas tp {world} [player]</#A8D5A2>, <#A8D5A2>/atlas spawn [world] [player]</#A8D5A2>, <#A8D5A2>/atlas setspawn</#A8D5A2>
     <#A8D5A2>/atlas flag {world} {flag} {on|off|default}</#A8D5A2>
     <#A8D5A2>/atlas set {world} {difficulty|gamemode|time|weather} {value}</#A8D5A2>
     <#A8D5A2>/atlas selector [player]</#A8D5A2>, <#A8D5A2>/atlas portal</#A8D5A2>, <#A8D5A2>/atlas keeploaded</#A8D5A2>, <#A8D5A2>/atlas reload</#A8D5A2>
 usage:
-  world: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas world list | create {name} {generator} | import {name} {generator} | enable {world} | disable {world} | delete {world} confirm | clone {source} {name} | reset {world} [source] confirm | pending | cancel {id}</#A8D5A2>"
+  world: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas world list | create {name} {generator} | import {name} {generator} | enable {world} | disable {world} | close {world} | open {world} | delete {world} confirm | clone {source} {name} | reset {world} [source] confirm | pending | cancel {id}</#A8D5A2>"
   info: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas info {world}</#A8D5A2>"
   tp: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas tp {world} [player]</#A8D5A2>"
   spawn: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas spawn [world] [player]</#A8D5A2>"
@@ -41,8 +41,11 @@ world:
   unknown-generator: "Oops, that generator is unknown. Use <#A8D5A2>normal, flat, void, nether or end</#A8D5A2>."
   created: "All set! World <#F3E5AB><world></#F3E5AB> is declared. It is generated and loaded at the next server start."
   imported: "All set! World <#F3E5AB><world></#F3E5AB> is declared from its existing folder. It is loaded at the next server start."
-  enabled: "All set! World <#F3E5AB><world></#F3E5AB> is enabled. It is loaded from the next server start."
-  disabled: "World <#F3E5AB><world></#F3E5AB> is disabled. It stays loaded until the next server start."
+  enabled: "<#F3E5AB>World <#FFFFFF><world></#FFFFFF> is enabled and loaded.</#F3E5AB>"
+  disabled: "<#F3E5AB>World <#FFFFFF><world></#FFFFFF> is disabled and unloaded.</#F3E5AB>"
+  closed: "<#F3E5AB>World <#FFFFFF><world></#FFFFFF> is closed. Players have been sent to spawn; staff retain access.</#F3E5AB>"
+  opened: "<#F3E5AB>World <#FFFFFF><world></#FFFFFF> is open to players.</#F3E5AB>"
+  closed-entry: "<#F3E5AB>World <#FFFFFF><world></#FFFFFF> is <#D9534F>closed</#D9534F>.</#F3E5AB>"
   delete-queued: "World <#F3E5AB><world></#F3E5AB> is disabled and its folder is deleted at the next server start."
   # <source>: the world that is copied
   clone-queued: "Copy of <#F3E5AB><source></#F3E5AB> queued for <#F3E5AB><world></#F3E5AB>. The next server start prepares it; the following start loads it."
@@ -72,6 +75,14 @@ world:
     already-enabled: "Already set! <#F3E5AB><world></#F3E5AB> is already enabled."
     already-disabled: "Already set! <#F3E5AB><world></#F3E5AB> is already disabled."
     not-found: "Nothing was found for <#F3E5AB><world></#F3E5AB>."
+    occupied: "<#F3E5AB>World <#FFFFFF><world></#FFFFFF> still contains players or an unfinished player transition. Move everyone out before disabling it.</#F3E5AB>"
+    pinned: "<#F3E5AB>World <#FFFFFF><world></#FFFFFF> still has active chunk tickets. Release those tickets before disabling it.</#F3E5AB>"
+    busy: "<#F3E5AB>World <#FFFFFF><world></#FFFFFF> already has an operation in progress or is still draining. Try again after it finishes.</#F3E5AB>"
+    cancelled: "<#F3E5AB>World <#FFFFFF><world></#FFFFFF> was kept loaded because another plugin cancelled the unload.</#F3E5AB>"
+    failed: "<#F3E5AB>World <#FFFFFF><world></#FFFFFF> could not be changed. Check the console before trying again.</#F3E5AB>"
+    unknown: "<#F3E5AB>World <#FFFFFF><world></#FFFFFF> has an uncertain runtime or saved state. Check the console; do not replace its files yet.</#F3E5AB>"
+    spawn-unavailable: "<#F3E5AB>World <#FFFFFF><world></#FFFFFF> cannot be closed because the configured local /spawn is unavailable or inside a closed world.</#F3E5AB>"
+    eviction-incomplete: "<#F3E5AB>World <#FFFFFF><world></#FFFFFF> is closed, but not every evacuation could be confirmed. Check the remaining players and repeat close.</#F3E5AB>"
 info:
   header: "<#F3E5AB>World</#F3E5AB> <#F3E5AB><world></#F3E5AB>"
   state: "<#F3E5AB>Loaded:</#F3E5AB> <loaded> · <#F3E5AB>Enabled:</#F3E5AB> <enabled> · <#F3E5AB>Generator:</#F3E5AB> <generator> · <#F3E5AB>Players:</#F3E5AB> <players>"

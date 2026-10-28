@@ -1,11 +1,12 @@
 # Permissions
 
-Every `/atlas` administration command, its tab completion, and selector issuance requires `atlas.admin`. OP is explicitly admitted in command and listener checks. `atlas.admin` has the declared child `atlas.gamemode.bypass: true`.
+Every `/atlas` administration command, its tab completion, and selector issuance requires `atlas.admin`. OP is explicitly admitted in command and listener checks. `atlas.admin` has the declared child `atlas.gamemode.bypass: true` and `atlas.world.closed.bypass: true`.
 
 | Permission | Default | Purpose | Children | Approved rank allocation | Current read-only LuckPerms evidence |
 | --- | --- | --- | --- | --- | --- |
 | `atlas.admin` | OP | Every Atlas management command and staff selector delivery. | `atlas.gamemode.bypass: true` | `manager`, recorded in `Ranks.md`. | No explicit Atlas grant was found on groups or users in the captured database; runtime manager grant is therefore not verified. |
 | `atlas.gamemode.bypass` | OP | Keep your game mode while in a world with a forced game mode. | None of its own. | `manager`, recorded in `Ranks.md`; also inherited from `atlas.admin`. | No explicit Atlas grant was found on groups or users in the captured database; runtime manager grant is therefore not verified. |
+| `atlas.world.closed.bypass` | OP | Enter and remain in closed worlds. | None. | `support`, inherited by higher staff; owner decision 28 October 2026. | Build-only release: no live LuckPerms grant changed. |
 | `atlas.portal.use` | `true` | Use Atlas portals. | None. | `default`, recorded in `Ranks.md`. | No explicit grant was found; Bukkit's declared `true` default currently admits non-OP players. |
 | `atlas.portal.<name>` | OP, registered at runtime for each restricted portal | Additional access to that portal. | None. | Deliberately unassigned by Ferry's 4 October decision. | No explicit Atlas grant was found on groups or users. |
 

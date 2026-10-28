@@ -230,8 +230,9 @@ public final class WorldFolders {
                         if (attributes.isSymbolicLink() || !attributes.isRegularFile())
                             throw new IOException("World copy contains a non-regular file");
                         Path relative = source.relativize(file);
+                        String portable = relative.toString().replace('\\', '/');
                         if (SKIPPED.contains(file.getFileName().toString())
-                                || relative.toString().replace('\\', '/').equals(PAPER_IDENTITY))
+                                || portable.equals(PAPER_IDENTITY) || portable.endsWith("/" + PAPER_IDENTITY))
                             return FileVisitResult.CONTINUE;
                         if (pending.size() == copyThreads) awaitCopy(completions, pending);
                         pending.add(completions.submit(() -> {

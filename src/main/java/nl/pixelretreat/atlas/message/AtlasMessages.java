@@ -52,6 +52,18 @@ public final class AtlasMessages {
             Map.entry("usage.spawn", Set.of()), Map.entry("usage.setspawn", Set.of()), Map.entry("usage.flag", Set.of()),
             Map.entry("usage.set", Set.of()), Map.entry("usage.portal", Set.of()), Map.entry("usage.keeploaded", Set.of()),
             Map.entry("world.unknown-generator", Set.of()),
+            Map.entry("world.closed", WORLD),
+            Map.entry("world.opened", WORLD),
+            Map.entry("world.closed-entry", WORLD),
+            Map.entry("world.error.occupied", WORLD),
+            Map.entry("world.error.pinned", WORLD),
+            Map.entry("world.error.busy", WORLD),
+            Map.entry("world.error.cancelled", WORLD),
+            Map.entry("world.error.failed", WORLD),
+            Map.entry("world.error.unknown", WORLD),
+            Map.entry("world.error.spawn-unavailable", WORLD),
+            Map.entry("world.error.eviction-incomplete", WORLD),
+
             Map.entry("world.created", WORLD), Map.entry("world.imported", WORLD), Map.entry("world.enabled", WORLD),
             Map.entry("world.disabled", WORLD), Map.entry("world.delete-queued", WORLD),
             Map.entry("world.clone-queued", Set.of("world", "source")), Map.entry("world.reset-queued", WORLD),
@@ -168,6 +180,10 @@ public final class AtlasMessages {
 
     /** A message as plain text for the console. */
     public String plain(String key) { return PlainTextComponentSerializer.plainText().serialize(catalog.get(key)); }
+
+    public net.kyori.adventure.text.Component render(String key, Map<String, String> values) {
+        return catalog.get(key, values);
+    }
 
     /** A message with placeholders as plain text for the console. */
     public String plain(String key, Map<String, String> values) {

@@ -14,14 +14,15 @@ import nl.pixelretreat.atlas.world.WorldNames;
 import nl.pixelretreat.atlas.world.WorldRecord;
 
 /**
- * World lifecycle. Changes are written to MariaDB and the Atlas data pack immediately; Minecraft
- * loads the new world set at the next start, when queued folder work also runs.
+ * World lifecycle. Existing initialized worlds use Veyra's live lifecycle; source declarations
+ * remain in MariaDB and the data pack. Queued folder changes run at startup.
  */
 public final class WorldAdminService {
     /** Result of a lifecycle request, mapped one to one to a message key by the command. */
     public enum Result {
         DONE, UNKNOWN_WORLD, BUILT_IN, ALREADY_EXISTS, FOLDER_EXISTS, FOLDER_MISSING, HAS_PORTALS,
-        HAS_REGIONS, NO_SOURCE, SAME_WORLD, ALREADY_ENABLED, ALREADY_DISABLED, NOT_FOUND
+        HAS_REGIONS, NO_SOURCE, SAME_WORLD, ALREADY_ENABLED, ALREADY_DISABLED, NOT_FOUND,
+        OCCUPIED, PINNED, BUSY, CANCELLED, FAILED, UNKNOWN, SPAWN_UNAVAILABLE, EVICTION_INCOMPLETE
     }
 
     private final AtlasRepository repository;
@@ -31,6 +32,28 @@ public final class WorldAdminService {
     private final WorldFolders folders;
     private final PortalService portals;
     private final KeepLoadedService keepLoaded;
+    private volatile org.bukkit.plugin.Plugin plugin;
+    private volatile dev.veyra.api.WorldLifecycle nativeWorlds;
+    private volatile WorldAccessService access;
+    private final java.util.Set<String> lifecycleChanges = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    public void runtime(org.bukkit.plugin.Plugin plugin, dev.veyra.api.WorldLifecycle nativeWorlds, WorldAccessService access) {
+        this.plugin = plugin; this.nativeWorlds = nativeWorlds; this.access = access;
+    }
+
+    public CompletableFuture<Result> setClosed(String key, boolean closed) {
+        WorldAccessService source = access;
+        return source == null ? CompletableFuture.completedFuture(Result.FAILED)
+                : source.setClosed(key, closed).thenApply(result -> Result.valueOf(result.name()));
+    }
+
+    public static dev.veyra.api.WorldLifecycle.SourceDimension sourceDimension(WorldGenerator generator) {
+        return switch (generator) {
+            case NETHER -> dev.veyra.api.WorldLifecycle.SourceDimension.NETHER;
+            case END -> dev.veyra.api.WorldLifecycle.SourceDimension.END;
+            default -> dev.veyra.api.WorldLifecycle.SourceDimension.OVERWORLD;
+        };
+    }
 
     public WorldAdminService(AtlasRepository repository, AtlasWorkers workers, RulesService rules,
                              DatapackWriter datapack, WorldFolders folders, PortalService portals,
@@ -62,19 +85,51 @@ public final class WorldAdminService {
         });
     }
 
-    /** Declares or undeclares a world from the next start on. */
+    /** Changes an initialized world's live state, then persists its matching startup declaration. */
     public CompletableFuture<Result> setEnabled(String key, boolean enabled) {
-        return change(() -> {
+        if (nativeWorlds == null || plugin == null) return CompletableFuture.completedFuture(Result.FAILED);
+        WorldAccessService originalAccess = access;
+        if (originalAccess != null && !originalAccess.beginLifecycle(key)) return CompletableFuture.completedFuture(Result.BUSY);
+        if (!lifecycleChanges.add(key)) {
+            if (originalAccess != null) originalAccess.endLifecycle(key);
+            return CompletableFuture.completedFuture(Result.BUSY);
+        }
+        return rules.serialized(() -> {
             if (WorldNames.builtIn(key)) return Result.BUILT_IN;
             Optional<WorldRecord> world = current().world(key);
             if (world.isEmpty() || world.get().generator().isEmpty()) return Result.UNKNOWN_WORLD;
-            if (world.get().enabled() == enabled) return enabled ? Result.ALREADY_ENABLED : Result.ALREADY_DISABLED;
+            if (repository.lifecycleBlocked(key, enabled)) return Result.BUSY;
             if (!enabled) {
                 if (portals.index().anyIn(key)) return Result.HAS_PORTALS;
                 if (keepLoaded.anyIn(key)) return Result.HAS_REGIONS;
             }
-            return repository.setEnabled(key, enabled) ? Result.DONE : Result.UNKNOWN_WORLD;
-        });
+            return Result.DONE;
+        }).thenCompose(preflight -> {
+            if (preflight != Result.DONE) return CompletableFuture.completedFuture(preflight);
+            WorldGenerator generator = current().world(key).orElseThrow().generator().orElseThrow();
+            var id = org.bukkit.NamespacedKey.fromString(key);
+            var operation = enabled ? nativeWorlds.enable(plugin, id, DatapackWriter.dimensionJson(generator), sourceDimension(generator))
+                    : nativeWorlds.disable(plugin, id);
+            return operation.thenCompose(outcome -> {
+                if (outcome != dev.veyra.api.WorldLifecycle.Result.DONE
+                        && outcome != dev.veyra.api.WorldLifecycle.Result.ALREADY_ENABLED
+                        && outcome != dev.veyra.api.WorldLifecycle.Result.ALREADY_DISABLED)
+                    return CompletableFuture.completedFuture(Result.valueOf(outcome.name()));
+                return rules.serialized(() -> {
+                    // Persist only a proved runtime outcome. A later persistence failure stays UNKNOWN.
+                    repository.setEnabled(key, enabled);
+                    var worlds = repository.loadWorlds();
+                    datapack.synchronize(worlds.values());
+                    rules.publish(worlds);
+                    if (enabled) rules.apply(key, false);
+                    return Result.DONE;
+                }).exceptionally(failure -> Result.UNKNOWN);
+            }).toCompletableFuture();
+        }).exceptionally(failure -> Result.UNKNOWN)
+                .whenComplete((result, failure) -> {
+                    lifecycleChanges.remove(key);
+                    if (originalAccess != null) originalAccess.endLifecycle(key);
+                }).copy();
     }
 
     /** Undeclares a world now and deletes its folder at the next start. */
@@ -151,6 +206,7 @@ public final class WorldAdminService {
     /** Runs a change on a worker, then rewrites the data pack and publishes fresh rules. */
     private CompletableFuture<Result> change(java.util.concurrent.Callable<Result> action) {
         return rules.serialized(() -> {
+            if (!lifecycleChanges.isEmpty()) return Result.BUSY;
             Result result = action.call();
             if (result == Result.DONE) {
                 var worlds = repository.loadWorlds();

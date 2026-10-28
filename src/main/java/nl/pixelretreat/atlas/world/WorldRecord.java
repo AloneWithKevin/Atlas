@@ -18,7 +18,13 @@ import org.bukkit.GameMode;
 public record WorldRecord(
         String key, Optional<WorldGenerator> generator, boolean enabled, Optional<String> resetSource,
         Optional<SpawnPoint> spawn, Optional<Difficulty> difficulty, Optional<GameMode> gameMode,
-        Optional<Long> fixedTime, Optional<WeatherMode> weather, Map<AtlasFlag, Boolean> flags) {
+        Optional<Long> fixedTime, Optional<WeatherMode> weather, Map<AtlasFlag, Boolean> flags, boolean closed) {
+
+    public WorldRecord(String key, Optional<WorldGenerator> generator, boolean enabled, Optional<String> resetSource,
+                       Optional<SpawnPoint> spawn, Optional<Difficulty> difficulty, Optional<GameMode> gameMode,
+                       Optional<Long> fixedTime, Optional<WeatherMode> weather, Map<AtlasFlag, Boolean> flags) {
+        this(key, generator, enabled, resetSource, spawn, difficulty, gameMode, fixedTime, weather, flags, false);
+    }
 
     public WorldRecord {
         flags = Map.copyOf(flags);
@@ -32,4 +38,9 @@ public record WorldRecord(
 
     /** Whether this is one of the three vanilla dimensions. */
     public boolean builtIn() { return WorldNames.builtIn(key); }
+
+    public WorldRecord withClosed(boolean closed) {
+        return new WorldRecord(key, generator, enabled, resetSource, spawn, difficulty, gameMode,
+                fixedTime, weather, flags, closed);
+    }
 }
