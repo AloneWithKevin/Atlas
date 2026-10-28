@@ -48,6 +48,30 @@ class WorldFoldersTest {
         assertThrows(IOException.class, () -> folders.prepareCopy(vanillaTarget, ignored -> { }));
     }
 
+    @Test void completeNativeSaveCopyKeepsItsLayoutButNotItsNestedDimensionIdentities() throws Exception {
+        Path source = dimensions.resolve("atlas/template");
+        Files.createDirectories(source);
+        Files.writeString(source.resolve("level.dat"), "native level");
+        for (String dimension : java.util.List.of("overworld", "the_nether", "the_end")) {
+            Path nested = source.resolve("dimensions/minecraft/" + dimension);
+            Files.createDirectories(nested.resolve("data/paper"));
+            Files.createDirectories(nested.resolve("region"));
+            Files.writeString(nested.resolve("data/paper/metadata.dat"), "original uuid");
+            Files.writeString(nested.resolve("data/paper/level_overrides.dat"), "original settings");
+            Files.writeString(nested.resolve("region/r.0.0.mca"), dimension);
+        }
+        var folders = new WorldFolders(dimensions, 2);
+        folders.copy("atlas:template", "atlas:copy");
+        Path copy = dimensions.resolve("atlas/copy");
+        assertEquals("native level", Files.readString(copy.resolve("level.dat")));
+        for (String dimension : java.util.List.of("overworld", "the_nether", "the_end")) {
+            Path nested = copy.resolve("dimensions/minecraft/" + dimension);
+            assertFalse(Files.exists(nested.resolve("data/paper/metadata.dat")));
+            assertEquals("original settings", Files.readString(nested.resolve("data/paper/level_overrides.dat")));
+            assertEquals(dimension, Files.readString(nested.resolve("region/r.0.0.mca")));
+        }
+    }
+
     @Test void preparedCopyCanPublishWhileRetainingTheOriginalTree() throws Exception {
         world("atlas", "template", "fresh");
         world("atlas", "arena", "played");

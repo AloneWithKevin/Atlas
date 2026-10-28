@@ -1,3 +1,14 @@
-revision: atlas-live-selector-20261022
+revision: atlas-live-worlds-20261028
 replace-if-equal:
   selector.pending: "Your <#F3E5AB>Atlas selector</#F3E5AB> delivery is still unresolved. <#A8D5A2>Check your inventory</#A8D5A2> before trying again."
+  world.enabled: "All set! World <#F3E5AB><world></#F3E5AB> is enabled. It is loaded from the next server start."
+  world.disabled: "World <#F3E5AB><world></#F3E5AB> is disabled. It stays loaded until the next server start."
+  help.lines: |-
+      <#F3E5AB>Atlas</#F3E5AB>
+      <#A8D5A2>/atlas world</#A8D5A2> <#A8D5A2>list, create, import, enable, disable, delete, clone, reset, pending, cancel</#A8D5A2>
+      <#A8D5A2>/atlas info {world}</#A8D5A2> — state, settings and flags
+      <#A8D5A2>/atlas tp {world} [player]</#A8D5A2>, <#A8D5A2>/atlas spawn [world] [player]</#A8D5A2>, <#A8D5A2>/atlas setspawn</#A8D5A2>
+      <#A8D5A2>/atlas flag {world} {flag} {on|off|default}</#A8D5A2>
+      <#A8D5A2>/atlas set {world} {difficulty|gamemode|time|weather} {value}</#A8D5A2>
+      <#A8D5A2>/atlas selector [player]</#A8D5A2>, <#A8D5A2>/atlas portal</#A8D5A2>, <#A8D5A2>/atlas keeploaded</#A8D5A2>, <#A8D5A2>/atlas reload</#A8D5A2>
+  usage.world: "<#F3E5AB>Usage:</#F3E5AB> <#A8D5A2>/atlas world list | create {name} {generator} | import {name} {generator} | enable {world} | disable {world} | delete {world} confirm | clone {source} {name} | reset {world} [source] confirm | pending | cancel {id}</#A8D5A2>"

@@ -2,7 +2,9 @@
 
 ## World lifecycle
 
-Atlas does not call Bukkit `createWorld` or `unloadWorld`. Veyra loads dimensions from the world registry before plugins are enabled. Atlas writes its generated data pack from database state and handles queued folder operations in `onLoad`, before those worlds load. New/imported/enabled worlds become available after a server start. Clone/reset operations prepare and verify folder copies at startup and activate the published world on a later startup. Uncertain files remain preserved and the affected target remains disabled. See [world recovery](world-recovery.md).
+Atlas does not call Bukkit `createWorld` or `unloadWorld`. Veyra loads dimensions from the world registry before plugins are enabled. Atlas writes its generated data pack from database state and handles queued folder operations in `onLoad`, before those worlds load. New terrain is generated at startup. Initialized worlds may also be enabled/disabled through the public Veyra world lifecycle while the server runs. Native construction and IO run on bounded workers; global publication is separate from exact-instance region/task/move admission and verified shutdown. Atlas persists only proven runtime outcomes and reports uncertainty on a persistence failure. Clone/reset operations prepare and verify folder copies at startup and activate the published world on a later startup. Uncertain files remain preserved and the affected target remains disabled. See [world recovery](world-recovery.md).
+
+Closed access is stored separately from enabled state. Native original-player admission denies ordinary entries; existing players and already accepted arrivals are evacuated on their entity owners to Toolbox's published actual local spawn. A native barrier waits for the original accepted moves before a second evacuation sweep. Staff bypass is checked again on the owning player, and reopening does not move players or reload files.
 
 ## Server identity and storage
 

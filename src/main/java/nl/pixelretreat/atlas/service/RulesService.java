@@ -97,6 +97,15 @@ public final class RulesService implements AtlasRules {
         snapshot.set(new RulesSnapshot(worlds, config.defaultFlags()));
     }
 
+    /** Caller holds publicationLock; no second SQL read may hide a committed access decision. */
+    public void publishAccess(String key, boolean closed) {
+        RulesSnapshot current = java.util.Objects.requireNonNull(snapshot.get(), "Rules not ready");
+        Map<String, WorldRecord> worlds = new java.util.HashMap<>();
+        for (WorldRecord record : current.worlds()) worlds.put(record.key(), record);
+        worlds.put(key, current.worldOrBuiltIn(key).withClosed(closed));
+        publish(worlds);
+    }
+
     /** Applies the stored settings of every loaded world. */
     public void applyAll() {
         plugin.getServer().getGlobalRegionScheduler().run(plugin, task -> {

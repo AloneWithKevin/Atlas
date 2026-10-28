@@ -17,9 +17,13 @@ permissions:
     default: op
     children:
       atlas.gamemode.bypass: true
+      atlas.world.closed.bypass: true
   atlas.portal.use:
     description: Travel through Atlas portals.
     default: true
   atlas.gamemode.bypass:
     description: Keep your own game mode in worlds with a forced game mode.
+    default: op
+  atlas.world.closed.bypass:
+    description: Enter and remain in worlds closed to normal players.
     default: op

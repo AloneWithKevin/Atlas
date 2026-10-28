@@ -99,7 +99,15 @@ public final class AtlasPlugin extends JavaPlugin {
             repository.initialize();
             DatapackWriter writer = datapack(settings);
             startupOutcomes = new StartupOperations(repository, folders(settings), writer.declaredWorlds()).run();
-            datapackChangedAtStartup = writer.synchronize(repository.loadWorlds().values());
+            var storedWorlds = repository.loadWorlds();
+            for (var world : storedWorlds.values()) {
+                var nativeWorlds = dev.veyra.api.Veyra.worlds();
+                var key = org.bukkit.NamespacedKey.fromString(world.key());
+                if (world.generator().isPresent()) nativeWorlds.configureStorage(this, key,
+                        WorldAdminService.sourceDimension(world.generator().orElseThrow()));
+                if (world.closed()) nativeWorlds.closed(this, key, true, null, null);
+            }
+            datapackChangedAtStartup = writer.synchronize(storedWorlds.values());
         } catch (Exception failure) {
             loadFailure = failure;
         }
@@ -283,6 +291,13 @@ public final class AtlasPlugin extends JavaPlugin {
             keepLoaded = regions;
             WorldAdminService worlds = new WorldAdminService(repository, workers, rules, datapack(settings),
                     folders(settings), portals, regions);
+            var access = new nl.pixelretreat.atlas.service.WorldAccessService(this, repository, rules,
+                    teleports, dev.veyra.api.Veyra.worlds(), messages);
+            access.publishStored();
+            worlds.runtime(this, dev.veyra.api.Veyra.worlds(), access);
+            getServer().getPluginManager().registerEvents(access, this);
+            getServer().getServicesManager().register(nl.pixelretreat.atlas.api.AtlasWorldAccess.class,
+                    access, this, ServicePriority.Normal);
             rules.applyAll();
             CompletableFuture.allOf(portals.reload(), regions.reload()).whenComplete((done, failure) -> {
                 if (failure != null) { fail(failure); return; }

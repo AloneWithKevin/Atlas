@@ -23,3 +23,7 @@ The `trading` flag is the per-world Handshake policy. `AtlasFlag.TRADING` and `A
 Use `allowsSpawn(world, entityType, SpawnOrigin.PLUGIN)` before consuming a durable item or completing a plugin-owned spawn. Atlas's listener applies the same policy to actual `CUSTOM` spawns. Preserve the original operation result when a spawn is refused or cannot be established; do not turn an unavailable Atlas answer into permission to proceed.
 
 Current integrations are tracked in the workspace [plugin integration register](../../PLUGIN_INTEGRATIONS.md). EU/NA are the only supported Postbox region identities today; see [multiserver support](multiserver.md) before designing another node.
+
+## Local world access
+
+`AtlasWorldAccess` is published through Bukkit services after Atlas is ready. `closed(key)` reads the immutable source snapshot. `setClosed(key, true)` preflights the owning Toolbox spawn source, persists the restriction, publishes native admission and evacuates ordinary players. Its result distinguishes `DONE`, `UNKNOWN_WORLD`, `BUSY`, `SPAWN_UNAVAILABLE`, `EVICTION_INCOMPLETE` and `FAILED`. An incomplete evacuation leaves access closed; do not claim that all players moved. `setClosed(key, false)` only restores access. These are local operations; they neither stop the server nor delete a world.
