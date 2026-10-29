@@ -36,6 +36,17 @@ public final class TeleportService {
         return teleportDetailed(player, world, point).thenApply(outcome -> outcome == Outcome.ARRIVED);
     }
 
+    /** Explicit admin travel to the configured/native spawn without searching for safe ground. */
+    public CompletableFuture<Outcome> teleportUnsafe(Player player, World world,
+                                                     java.util.function.BooleanSupplier admission) {
+        CompletableFuture<Outcome> result = new CompletableFuture<>();
+        Location destination = storedSpawn(world)
+                .map(spawn -> new Location(world, spawn.x(), spawn.y(), spawn.z(), spawn.yaw(), spawn.pitch()))
+                .orElseGet(world::getSpawnLocation);
+        move(player, destination, result, admission);
+        return result;
+    }
+
     /** Retains the provider's uncertain result for source metrics while the legacy API stays boolean. */
     public CompletableFuture<Outcome> teleportDetailed(Player player, World world, Optional<SpawnPoint> point) {
         return teleportDetailed(player, world, point, () -> true);

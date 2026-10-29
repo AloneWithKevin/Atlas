@@ -26,10 +26,12 @@ Newly generated worlds require startup; initialized imported or disabled worlds 
 | Command | Result |
 | --- | --- |
 | `/atlas info <world>` | Shows loaded/enabled state, generator, player count, settings and effective flags; `*` marks an override. |
-| `/atlas tp <world> [player]` | Teleports the sender or named online local player to the stored spawn or a safe nearby spot. The destination world must be loaded. |
-| `/atlas spawn [world] [player]` | Uses the given world or the selected player's/current sender's world. |
+| `/atlas tp <world> [player] [--unsafe]` | Teleports the sender or named online local player to the stored spawn or a safe nearby spot. The destination world must be loaded. |
+| `/atlas spawn [world] [player] [--unsafe]` | Uses the given world or the selected player's/current sender's world. |
 | `/atlas setspawn [world]` | A player stores their current position/direction in the current world (or the matching explicit world). |
 | `/atlas setspawn <world> <x> <y> <z> <yaw> <pitch>` | Console form with an explicit world and complete position. |
+
+Append `--unsafe` to travel directly to the stored spawn, or the native world spawn when none is stored, without searching for safe ground. This uses the existing Atlas admin permission and retains teleport-event and closed-world access checks. Example: `/atlas tp comet --unsafe` or `/atlas tp comet PlayerName --unsafe`.
 
 ## Rules
 

@@ -253,6 +253,8 @@ public final class AtlasCommand implements TabExecutor {
     }
 
     private void teleport(CommandSender sender, Services s, String[] args, boolean spawnCommand) {
+        boolean unsafe = args.length > 0 && args[args.length - 1].equalsIgnoreCase("--unsafe");
+        if (unsafe) args = Arrays.copyOf(args, args.length - 1);
         if (args.length > 2 || !spawnCommand && args.length == 0) {
             messages.send(sender, spawnCommand ? "usage.spawn" : "usage.tp");
             return;
@@ -268,8 +270,11 @@ public final class AtlasCommand implements TabExecutor {
         World world = loaded(key.get());
         if (world == null) { messages.send(sender, "common.not-loaded", Map.of("world", WorldNames.shortName(key.get()))); return; }
         String name = WorldNames.shortName(key.get());
-        s.teleports().teleport(target, world, Optional.empty()).whenComplete((arrived, failure) -> {
-            if (failure != null || !Boolean.TRUE.equals(arrived)) {
+        java.util.function.BooleanSupplier admission = () -> sender.isOp() || sender.hasPermission(ADMIN);
+        var travel = unsafe ? s.teleports().teleportUnsafe(target, world, admission)
+                : s.teleports().teleportDetailed(target, world, Optional.empty(), admission);
+        travel.whenComplete((arrived, failure) -> {
+            if (failure != null || arrived != TeleportService.Outcome.ARRIVED) {
                 messages.send(sender, "teleport.failed", Map.of("world", name));
                 return;
             }
@@ -730,7 +735,8 @@ public final class AtlasCommand implements TabExecutor {
                     case "enable", "disable", "close", "open", "delete", "clone", "reset" -> worlds;
                     default -> List.of();
                 };
-                case "tp", "spawn" -> plugin.getServer().getOnlinePlayers().stream().map(Player::getName).toList();
+                case "tp", "spawn" -> java.util.stream.Stream.concat(java.util.stream.Stream.of("--unsafe"),
+                        plugin.getServer().getOnlinePlayers().stream().map(Player::getName)).toList();
                 case "flag" -> flagKeys();
                 case "set" -> SETTINGS;
                 case "portal" -> args[1].equalsIgnoreCase("create") || args[1].equalsIgnoreCase("list") ? List.of()
@@ -740,6 +746,7 @@ public final class AtlasCommand implements TabExecutor {
                 default -> List.of();
             };
             case 4 -> switch (first) {
+                case "tp", "spawn" -> args[2].equalsIgnoreCase("--unsafe") ? List.of() : List.of("--unsafe");
                 case "world" -> switch (args[1].toLowerCase(Locale.ROOT)) {
                     case "create", "import" -> Arrays.stream(WorldGenerator.values()).map(WorldGenerator::key).toList();
                     case "delete" -> List.of("confirm");

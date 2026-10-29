@@ -28,6 +28,31 @@ import org.junit.jupiter.api.Test;
 
 /** The trading flag flows through the shared flag command, completion, access and info output. */
 class AtlasCommandTest {
+    @Test void unsafeTravelParsesSelfAndExplicitPlayerAndRetainsAdminAccess() {
+        var plugin = mock(Plugin.class);
+        var server = mock(Server.class);
+        when(plugin.getServer()).thenReturn(server);
+        var world = mock(org.bukkit.World.class);
+        when(server.getWorld(org.bukkit.NamespacedKey.fromString("atlas:comet"))).thenReturn(world);
+        var player = mock(org.bukkit.entity.Player.class);
+        when(player.isOp()).thenReturn(true);
+        when(server.getPlayerExact("Traveler")).thenReturn(player);
+        var teleports = mock(nl.pixelretreat.atlas.service.TeleportService.class);
+        when(teleports.teleportUnsafe(eq(player), eq(world), any()))
+                .thenReturn(CompletableFuture.completedFuture(nl.pixelretreat.atlas.service.TeleportService.Outcome.ARRIVED));
+        var messages = mock(AtlasMessages.class);
+        var command = new AtlasCommand(plugin, messages,
+                new AtlasCommand.Services(config(true), mock(RulesService.class), null, teleports, null, null, null, null, null));
+        command.onCommand(player, null, "atlas", new String[]{"tp", "comet", "--unsafe"});
+        command.onCommand(admin(), null, "atlas", new String[]{"tp", "comet", "Traveler", "--unsafe"});
+        verify(teleports, times(2)).teleportUnsafe(eq(player), eq(world), any());
+        command.onCommand(mock(CommandSender.class), null, "atlas", new String[]{"tp", "comet", "Traveler", "--unsafe"});
+        verifyNoMoreInteractions(teleports);
+        doReturn(List.of(player)).when(server).getOnlinePlayers();
+        when(player.getName()).thenReturn("Traveler");
+        assertTrue(command.onTabComplete(admin(), null, "atlas", new String[]{"tp", "comet", "--"}).contains("--unsafe"));
+        assertEquals(List.of("--unsafe"), command.onTabComplete(admin(), null, "atlas", new String[]{"tp", "comet", "Traveler", ""}));
+    }
     @Test void explicitSourceWorldAndRemoteDestinationCompletionUseExecutablePositions() {
         var rules = mock(RulesService.class);
         var command = new AtlasCommand(null, null, new AtlasCommand.Services(config(true), rules, null, null, null, null, null, null, null));
