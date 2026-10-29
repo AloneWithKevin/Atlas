@@ -76,3 +76,8 @@ Completion follows the current command position and sender access. It suggests c
 Non-finite coordinates, reversed bounds, coordinate overflow, and portal volumes that overflow or exceed the configured cap are refused. A remote destination must name the other current EU/NA region. Permission is checked when the command executes and, for player movement, again at the entity-owned callback.
 
 There is no Atlas inventory GUI. The in-game selector is a two-corner tool, not a menu.
+
+Teleport attempts dispatch the standard cancellable player-teleport event on the
+original entity owner before the native async move. A cancellation or changed
+destination refuses the move before dismount/eject. This lets the owning Comet
+policy block ordinary plugin entry while keeping staff teleport access.
