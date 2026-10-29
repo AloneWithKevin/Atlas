@@ -30,7 +30,7 @@ class TeleportServiceTest {
         var spawn = new org.bukkit.Location(world, 4.5, 90, -8.5, 45, 12);
         when(world.getSpawnLocation()).thenReturn(spawn);
         var rules = mock(RulesService.class);
-        var service = new TeleportService(mock(Plugin.class), rules, null);
+        var service = new TeleportService(mock(Plugin.class,RETURNS_DEEP_STUBS), rules, null);
         when(player.teleportAsync(eq(spawn), any(org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.class))).thenReturn(CompletableFuture.completedFuture(true));
         var admitted = new AtomicBoolean(true);
         var first = service.teleportUnsafe(player, world, admitted::get);
@@ -74,9 +74,19 @@ class TeleportServiceTest {
         });
         when(player.teleportAsync(any(org.bukkit.Location.class), any(org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.class)))
                 .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("lost reply")));
-        var result = new TeleportService(mock(Plugin.class), null, null).teleportDetailed(player, mock(World.class),
+        var result = new TeleportService(mock(Plugin.class,RETURNS_DEEP_STUBS), null, null).teleportDetailed(player, mock(World.class),
                 Optional.of(new SpawnPoint(0, 64, 0, 0, 0)));
         assertEquals(TeleportService.Outcome.UNKNOWN, result.join());
         verify(player, times(1)).teleportAsync(any(org.bukkit.Location.class), any(org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.class));
+    }
+    @Test void cancelledWorldAdmissionRefusesBeforeDismountOrNativeTeleport() {
+        var plugin=mock(Plugin.class,RETURNS_DEEP_STUBS);var player=mock(Player.class);when(player.isOnline()).thenReturn(true);
+        var scheduler=mock(EntityScheduler.class);when(player.getScheduler()).thenReturn(scheduler);
+        when(scheduler.run(any(),any(),any())).thenAnswer(call->{((Consumer<ScheduledTask>)call.getArgument(1)).accept(mock(ScheduledTask.class));return mock(ScheduledTask.class);});
+        var manager=plugin.getServer().getPluginManager();
+        doAnswer(call->{call.getArgument(0,org.bukkit.event.player.PlayerTeleportEvent.class).setCancelled(true);return null;}).when(manager).callEvent(any());
+        var result=new TeleportService(plugin,null,null).teleportDetailed(player,mock(World.class),Optional.of(new SpawnPoint(0,64,0,0,0)));
+        assertEquals(TeleportService.Outcome.NOT_PERFORMED,result.join());
+        verify(player,never()).teleportAsync(any(org.bukkit.Location.class),any(org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.class));verify(player,never()).leaveVehicle();verify(player,never()).eject();
     }
 }

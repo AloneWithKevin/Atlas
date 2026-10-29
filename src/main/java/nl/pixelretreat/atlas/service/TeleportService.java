@@ -85,9 +85,12 @@ public final class TeleportService {
                       java.util.function.BooleanSupplier admission) {
         boolean scheduled = player.getScheduler().run(plugin, task -> {
             if (!player.isOnline() || !admission.getAsBoolean()) { result.complete(Outcome.NOT_PERFORMED); return; }
-            if (player.isInsideVehicle()) player.leaveVehicle();
-            if (!player.getPassengers().isEmpty()) player.eject();
             try {
+                var event=new PlayerTeleportEvent(player,player.getLocation(),destination.clone(),PlayerTeleportEvent.TeleportCause.PLUGIN);
+                plugin.getServer().getPluginManager().callEvent(event);
+                if(event.isCancelled()||!destination.equals(event.getTo())){result.complete(Outcome.NOT_PERFORMED);return;}
+                if (player.isInsideVehicle()) player.leaveVehicle();
+                if (!player.getPassengers().isEmpty()) player.eject();
                 player.teleportAsync(destination, PlayerTeleportEvent.TeleportCause.PLUGIN)
                         .whenComplete((success, error) -> result.complete(error != null ? Outcome.UNKNOWN
                                 : Boolean.TRUE.equals(success) ? Outcome.ARRIVED : Outcome.NOT_PERFORMED));
