@@ -147,8 +147,8 @@ class AtlasResourcesTest {
             assertEquals("", yaml.getString("database.password"));
             yaml.set("database.username", "atlas");
             AtlasConfig config = AtlasConfig.read(yaml);
-            assertEquals("EU", config.region());
-            assertEquals("NA", config.otherRegion());
+            assertEquals("Hub01", config.serverId());
+            assertEquals(java.util.List.of("Survival01"),config.remoteServers());
             assertEquals(AtlasFlag.values().length, config.defaultFlags().size());
             assertFalse(config.defaultFlags().get(AtlasFlag.KEEP_INVENTORY));
             assertEquals(121, config.packFormat());

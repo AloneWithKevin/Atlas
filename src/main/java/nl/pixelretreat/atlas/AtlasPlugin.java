@@ -2,7 +2,7 @@ package nl.pixelretreat.atlas;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import dev.veyra.api.VeyraCluster;
+import nl.pixelretreat.postbox.api.PostboxNetwork;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
@@ -95,11 +95,11 @@ public final class AtlasPlugin extends JavaPlugin {
             AtlasConfig settings = AtlasConfig.read(YamlConfiguration.loadConfiguration(
                     getDataFolder().toPath().resolve("config.yml").toFile()));
             BootstrapIdentityGuard.requireMatch(
-                    getServer().getServicesManager().load(PostboxBootstrapIdentity.class), settings.region());
+                    getServer().getServicesManager().load(PostboxBootstrapIdentity.class), settings.serverId());
             config = settings;
             levelFolder = levelFolder();
             database = openDatabase(settings);
-            repository = new AtlasRepository(database, settings.region());
+            repository = new AtlasRepository(database, settings.serverId());
             repository.initialize();
             DatapackWriter writer = datapack(settings);
             startupOutcomes = new StartupOperations(repository, folders(settings), writer.declaredWorlds()).run();
@@ -196,13 +196,12 @@ public final class AtlasPlugin extends JavaPlugin {
      */
     private void connect(AtlasConfig settings, RulesService rules, int attempt) {
         if (stopped.get() || !isEnabled()) return;
-        VeyraCluster link = getServer().getServicesManager().load(VeyraCluster.class);
+        PostboxNetwork link = getServer().getServicesManager().load(PostboxNetwork.class);
         CampfireMessages messages = getServer().getServicesManager().load(CampfireMessages.class);
         ClosetService items = getServer().getServicesManager().load(ClosetService.class);
-        if (link != null && link.isEnabled() && link.localNode().isPresent()
-                && !link.localNode().get().name().equalsIgnoreCase(settings.region())) {
-            fail(new IllegalStateException("Postbox is " + link.localNode().get().name()
-                + " but Atlas expects " + settings.region()));
+        if (link != null && !link.topology().localServer().value().equals(settings.serverId())) {
+            fail(new IllegalStateException("Postbox is " + link.topology().localServer().value()
+                + " but Atlas expects " + settings.serverId()));
             return;
         }
         String late = lateContracts(link, messages, items);
@@ -218,7 +217,7 @@ public final class AtlasPlugin extends JavaPlugin {
         }
         campfire = messages;
         closet = items;
-        String backend = link.localNode().orElseThrow().name();
+        String backend = link.topology().localServer().value();
         messages.register(this).toCompletableFuture()
                 .thenCompose(registered -> {
                     AtlasMessages.validateCatalog(registered);
@@ -249,11 +248,10 @@ public final class AtlasPlugin extends JavaPlugin {
     }
 
     /** Names the contracts that have not been published yet, or null when all of them are ready. */
-    private static String lateContracts(VeyraCluster link, CampfireMessages messages, ClosetService items) {
+    private static String lateContracts(PostboxNetwork link, CampfireMessages messages, ClosetService items) {
         List<String> late = new ArrayList<>();
         if (link == null) late.add("Postbox cluster link");
-        else if (!link.isEnabled()) late.add("Postbox cluster link (not enabled)");
-        else if (link.localNode().isEmpty()) late.add("Postbox local node");
+        else if (!link.snapshot().members().containsKey(link.topology().localServer())) late.add("Postbox local lease");
         if (messages == null) late.add("Campfire messages");
         if (items == null) late.add("Closet service");
         return late.isEmpty() ? null : String.join(", ", late);

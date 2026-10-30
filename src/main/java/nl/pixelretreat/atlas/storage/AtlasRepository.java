@@ -44,7 +44,7 @@ public final class AtlasRepository {
 
     public AtlasRepository(DataSource database, String server) {
         this.database = database;
-        this.server = server;
+        this.server = new nl.pixelretreat.postbox.api.ServerId(server).value();
     }
 
     /** Statistics become writable only after the real Postbox node has been verified. */
@@ -90,7 +90,7 @@ public final class AtlasRepository {
                       completed BOOLEAN NOT NULL DEFAULT FALSE)""");
             statement.execute("""
                     CREATE TABLE IF NOT EXISTS atlas_world (
-                      server VARCHAR(8) NOT NULL, world VARCHAR(100) NOT NULL, generator VARCHAR(16) NULL,
+                      server VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, world VARCHAR(100) NOT NULL, generator VARCHAR(16) NULL,
                       enabled BOOLEAN NOT NULL, closed BOOLEAN NOT NULL DEFAULT FALSE, reset_source VARCHAR(100) NULL,
                       spawn_x DOUBLE NULL, spawn_y DOUBLE NULL, spawn_z DOUBLE NULL,
                       spawn_yaw FLOAT NULL, spawn_pitch FLOAT NULL,
@@ -100,14 +100,14 @@ public final class AtlasRepository {
             statement.execute("ALTER TABLE atlas_world ADD COLUMN IF NOT EXISTS closed BOOLEAN NOT NULL DEFAULT FALSE");
             statement.execute("""
                     CREATE TABLE IF NOT EXISTS atlas_world_flag (
-                      server VARCHAR(8) NOT NULL, world VARCHAR(100) NOT NULL, flag VARCHAR(32) NOT NULL,
+                      server VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, world VARCHAR(100) NOT NULL, flag VARCHAR(32) NOT NULL,
                       enabled BOOLEAN NOT NULL, PRIMARY KEY (server, world, flag))""");
             statement.execute("""
                     CREATE TABLE IF NOT EXISTS atlas_portal (
-                      server VARCHAR(8) NOT NULL, name VARCHAR(48) NOT NULL, world VARCHAR(100) NOT NULL,
+                      server VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, name VARCHAR(48) NOT NULL, world VARCHAR(100) NOT NULL,
                       min_x INT NOT NULL, min_y INT NOT NULL, min_z INT NOT NULL,
                       max_x INT NOT NULL, max_y INT NOT NULL, max_z INT NOT NULL,
-                      target_kind VARCHAR(16) NOT NULL, target_region VARCHAR(8) NULL, target_world VARCHAR(100) NOT NULL,
+                      target_kind VARCHAR(16) NOT NULL, target_region VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL, target_world VARCHAR(100) NOT NULL,
                       target_x DOUBLE NULL, target_y DOUBLE NULL, target_z DOUBLE NULL,
                       target_yaw FLOAT NULL, target_pitch FLOAT NULL,
                       cooldown_ms INT NOT NULL, sound VARCHAR(100) NULL, particle VARCHAR(64) NULL,
@@ -115,20 +115,20 @@ public final class AtlasRepository {
                       PRIMARY KEY (server, name))""");
             statement.execute("""
                     CREATE TABLE IF NOT EXISTS atlas_keep_loaded_region (
-                      server VARCHAR(8) NOT NULL, name VARCHAR(64) NOT NULL, world VARCHAR(100) NOT NULL,
+                      server VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, name VARCHAR(64) NOT NULL, world VARCHAR(100) NOT NULL,
                       min_chunk_x INT NOT NULL, min_chunk_z INT NOT NULL, max_chunk_x INT NOT NULL, max_chunk_z INT NOT NULL,
                       PRIMARY KEY (server, name))""");
             statement.execute("""
                     CREATE TABLE IF NOT EXISTS atlas_pending_operation (
-                      id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, server VARCHAR(8) NOT NULL,
+                      id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, server VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
                       kind VARCHAR(16) NOT NULL, world VARCHAR(100) NOT NULL, source VARCHAR(100) NULL,
                       requested_by CHAR(36) NOT NULL, requested_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
                       state VARCHAR(16) NOT NULL, result VARCHAR(255) NULL, finished_at TIMESTAMP(3) NULL,
                       KEY atlas_pending_server_state (server, state))""");
             statement.execute("""
                     CREATE TABLE IF NOT EXISTS atlas_travel_ticket (
-                      id CHAR(36) NOT NULL PRIMARY KEY, player CHAR(36) NOT NULL, origin_region VARCHAR(8) NOT NULL,
-                      target_region VARCHAR(8) NOT NULL, portal VARCHAR(48) NOT NULL, target_world VARCHAR(100) NOT NULL,
+                      id CHAR(36) NOT NULL PRIMARY KEY, player CHAR(36) NOT NULL, origin_region VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                      target_region VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, portal VARCHAR(48) NOT NULL, target_world VARCHAR(100) NOT NULL,
                       target_x DOUBLE NULL, target_y DOUBLE NULL, target_z DOUBLE NULL,
                       target_yaw FLOAT NULL, target_pitch FLOAT NULL,
                       created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), expires_at TIMESTAMP(3) NOT NULL,
@@ -136,18 +136,23 @@ public final class AtlasRepository {
                       KEY atlas_ticket_arrival (player, target_region, consumed_at))""");
             statement.execute("""
                     CREATE TABLE IF NOT EXISTS atlas_world_copy (
-                      server VARCHAR(8) NOT NULL, operation_id BIGINT NOT NULL,
+                      server VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, operation_id BIGINT NOT NULL,
                       world VARCHAR(100) NOT NULL, source VARCHAR(100) NOT NULL,
                       phase VARCHAR(16) NOT NULL, activate_after_copy BOOLEAN NOT NULL,
                       prepared_entries BIGINT NOT NULL DEFAULT 0, original_entries BIGINT NOT NULL DEFAULT 0,
                       PRIMARY KEY (server, operation_id), KEY atlas_copy_world (server, world, phase))""");
             statement.execute("""
                     CREATE TABLE IF NOT EXISTS atlas_world_copy_entry (
-                      server VARCHAR(8) NOT NULL, operation_id BIGINT NOT NULL, tree_kind VARCHAR(8) NOT NULL,
+                      server VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, operation_id BIGINT NOT NULL, tree_kind VARCHAR(8) NOT NULL,
                       path_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
                       entry_path TEXT NOT NULL, directory BOOLEAN NOT NULL, bytes BIGINT NOT NULL,
                       sha256 CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
                       PRIMARY KEY (server, operation_id, tree_kind, path_hash))""");
+            for(String table:List.of("atlas_world","atlas_world_flag","atlas_portal","atlas_keep_loaded_region",
+                    "atlas_pending_operation","atlas_world_copy","atlas_world_copy_entry"))
+                ServerIdentityColumns.widen(connection,table,"server");
+            ServerIdentityColumns.widen(connection,"atlas_portal","target_region");
+            ServerIdentityColumns.widen(connection,"atlas_travel_ticket","origin_region","target_region");
         }
     }
 
@@ -1184,7 +1189,7 @@ public final class AtlasRepository {
     }
 
     /** The region code this repository writes, for messages and tests. */
-    public String server() { return server.toUpperCase(Locale.ROOT); }
+    public String server() { return server; }
 
     /** Read-only historical selector evidence. Never used to authorize physical replay. */
     public Optional<UUID> pendingSelector(UUID player) throws SQLException {

@@ -2,13 +2,17 @@
 
 Atlas reads `plugins/Atlas/config.yml` during startup. Required configuration is validated strictly; a missing or invalid field prevents Atlas from starting. The repository template contains empty database username/password values. Fill actual credentials only in the server-local config. Diagnostics redact all database details.
 
-Set `server.region` to the exact current Postbox region on that backend (`EU` or `NA`). These are the only supported node identities. Do not configure a third region or copy a proxy alias as a new backend identity. Keep the shared database settings consistent with the existing `pixelretreat_veyra` connection. `server.proxy-names.EU` and `.NA` must match the Velocity names for the current regional destinations.
+Set `server.id` to the exact Postbox server ID (up to 64 ASCII characters). Region is separate metadata.
+Keep the shared database settings consistent with the existing `pixelretreat_veyra` connection.
+`server.proxy-names` maps exact server IDs to actual Velocity names and includes the local server.
+Only explicitly configured remote IDs are accepted. Multiple servers can share a region; no opposite
+region or destination is inferred. Changing the setting never renames historical database rows.
 
 The Atlas configuration has these sections:
 
 | Key | Meaning and validated range |
 | --- | --- |
-| `server.region` | Actual Postbox identity: `EU` or `NA`. |
+| `server.id` | Exact actual Postbox server ID; case is preserved. |
 | `server.proxy-names.EU`, `server.proxy-names.NA` | Velocity server names for those two regions. |
 | `database.host`, `port`, `name`, `username`, `password`, `ssl-mode` | Shared MariaDB settings. SSL mode is `disable`, `trust`, `verify-ca` or `verify-full`. Repository credentials are blank. |
 | `datapack.pack-format` | Data-pack format for the running game version (121 for Veyra 26.3). |

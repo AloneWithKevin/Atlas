@@ -564,8 +564,8 @@ public final class AtlasCommand implements TabExecutor {
             try { target = new PortalTarget(PortalTarget.Kind.LOCATION, Optional.empty(), world.get(), Optional.of(point(args, 2))); }
             catch (IllegalArgumentException invalid) { messages.send(sender, "usage.portal"); return; }
         } else if ((args.length == 3 || args.length == 6 || args.length == 8) && args[0].equalsIgnoreCase("server")) {
-            String region = args[1].toUpperCase(Locale.ROOT);
-            if (!region.equals(s.config().otherRegion())) { messages.send(sender, "portal.invalid-region"); return; }
+            String region = args[1];
+            if (!s.config().routesTo(region)) { messages.send(sender, "portal.invalid-region"); return; }
             Optional<String> world = worldKey(sender, args[2]);
             if (world.isEmpty()) return;
             Optional<SpawnPoint> point = Optional.empty();
@@ -788,10 +788,10 @@ public final class AtlasCommand implements TabExecutor {
                     : first.equals("portal") && args[1].equalsIgnoreCase("create") ? worlds
                     : first.equals("portal") && args[1].equalsIgnoreCase("target")
                     ? (args[3].equalsIgnoreCase("spawn") || args[3].equalsIgnoreCase("location") ? worlds
-                    : args[3].equalsIgnoreCase("server") ? List.of(ready.config().otherRegion()) : List.of())
+                    : args[3].equalsIgnoreCase("server") ? ready.config().remoteServers() : List.of())
                     : List.of();
             case 6 -> first.equals("portal") && args[1].equalsIgnoreCase("target")
-                    && args[3].equalsIgnoreCase("server") && args[4].equalsIgnoreCase(ready.config().otherRegion()) ? worlds : List.of();
+                    && args[3].equalsIgnoreCase("server") && ready.config().routesTo(args[4]) ? worlds : List.of();
             default -> List.of();
         };
         String typed = args[args.length - 1].toLowerCase(Locale.ROOT);

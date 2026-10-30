@@ -132,21 +132,24 @@ public final class AtlasStatistics {
             statement.execute("CREATE TABLE IF NOT EXISTS " + WORLD_ORIGINS + " ("
                     + "operation_id CHAR(36) NOT NULL PRIMARY KEY, source_id BIGINT NOT NULL UNIQUE, "
                     + "actor_id CHAR(36) NOT NULL, kind VARCHAR(16) NOT NULL, world VARCHAR(100) NOT NULL, "
-                    + "source_world VARCHAR(100) NULL, origin_backend VARCHAR(8) NOT NULL, accepted_at BIGINT NOT NULL, "
+                    + "source_world VARCHAR(100) NULL, origin_backend VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, accepted_at BIGINT NOT NULL, "
                     + "terminal_at BIGINT NULL, terminal_outcome VARCHAR(24) NULL, unresolved BOOLEAN NOT NULL DEFAULT FALSE, "
                     + "KEY atlas_logbook_world_open (source_id, terminal_at)"
                     + ") ENGINE=InnoDB");
             statement.execute("CREATE TABLE IF NOT EXISTS " + PORTAL_ORIGINS + " ("
                     + "operation_id CHAR(36) NOT NULL PRIMARY KEY, player_id CHAR(36) NOT NULL, portal VARCHAR(48) NOT NULL, "
-                    + "origin_backend VARCHAR(8) NOT NULL, target_backend VARCHAR(8) NOT NULL, source_world VARCHAR(100) NOT NULL, "
+                    + "origin_backend VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, target_backend VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, source_world VARCHAR(100) NOT NULL, "
                     + "target_world VARCHAR(100) NOT NULL, accepted_at BIGINT NOT NULL, arrival_consumed BOOLEAN NOT NULL DEFAULT FALSE, "
                     + "terminal_at BIGINT NULL, terminal_outcome VARCHAR(24) NULL, KEY atlas_logbook_portal_open (terminal_at, accepted_at)"
                     + ") ENGINE=InnoDB");
             statement.execute("CREATE TABLE IF NOT EXISTS " + VISITS + " ("
                     + "operation_id CHAR(36) NOT NULL PRIMARY KEY, player_id CHAR(36) NOT NULL, world VARCHAR(100) NOT NULL, "
-                    + "source_backend VARCHAR(8) NOT NULL, start_reason VARCHAR(32) NOT NULL, started_at BIGINT NOT NULL, state VARCHAR(16) NOT NULL, "
+                    + "source_backend VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, start_reason VARCHAR(32) NOT NULL, started_at BIGINT NOT NULL, state VARCHAR(16) NOT NULL, "
                     + "ended_at BIGINT NULL, end_reason VARCHAR(24) NULL, KEY atlas_logbook_visit_open (source_backend, player_id, state)"
                     + ") ENGINE=InnoDB");
+            nl.pixelretreat.atlas.storage.ServerIdentityColumns.widen(connection,WORLD_ORIGINS,"origin_backend");
+            nl.pixelretreat.atlas.storage.ServerIdentityColumns.widen(connection,PORTAL_ORIGINS,"origin_backend","target_backend");
+            nl.pixelretreat.atlas.storage.ServerIdentityColumns.widen(connection,VISITS,"source_backend");
         }
         for (MetricDefinition definition : durableDefinitions) writer.register(definition);
         diagnostics.initialize();
@@ -170,7 +173,7 @@ public final class AtlasStatistics {
         long acceptedAt;
         try (PreparedStatement query = connection.prepareStatement(
                 "SELECT requested_at FROM atlas_pending_operation WHERE id = ? AND server = ?")) {
-            query.setLong(1, sourceId); query.setString(2, backend.toUpperCase(Locale.ROOT));
+            query.setLong(1, sourceId); query.setString(2, backend);
             try (ResultSet row = query.executeQuery()) {
                 if (!row.next()) throw new SQLException("Atlas operation source row is missing");
                 acceptedAt = row.getTimestamp(1).getTime();
@@ -218,7 +221,7 @@ public final class AtlasStatistics {
         long endedAt;
         try (PreparedStatement query = connection.prepareStatement(
                 "SELECT finished_at FROM atlas_pending_operation WHERE id = ? AND server = ?")) {
-            query.setLong(1, sourceId); query.setString(2, backend.toUpperCase(Locale.ROOT));
+            query.setLong(1, sourceId); query.setString(2, backend);
             try (ResultSet row = query.executeQuery()) {
                 if (!row.next() || row.getTimestamp(1) == null) throw new SQLException("Atlas terminal timestamp is missing");
                 endedAt = row.getTimestamp(1).getTime();
@@ -710,7 +713,7 @@ public final class AtlasStatistics {
     }
     private static String checkedBackend(String value) {
         if (value == null) throw new IllegalArgumentException("Actual Atlas backend is required");
-        if (!value.equals("EU") && !value.equals("NA")) throw new IllegalArgumentException("Unknown Atlas backend");
+        if (!nl.pixelretreat.atlas.config.AtlasConfig.validServerId(value)) throw new IllegalArgumentException("Invalid Atlas backend");
         return value;
     }
     private static String checkedOutcome(String outcome) {

@@ -40,7 +40,7 @@ public final class WorldVisits {
     public WorldVisits(DataSource database, ProducerLimits limits, String backend, int capacity,
                        Consumer<Throwable> warning) {
         this.database = bounded(Objects.requireNonNull(database));
-        if (!Set.of("EU", "NA").contains(backend) || capacity < 1)
+        if (!nl.pixelretreat.atlas.config.AtlasConfig.validServerId(backend) || capacity < 1)
             throw new IllegalArgumentException("Actual node and bounded capture capacity required");
         this.backend = backend; this.capacity = capacity; this.warning = Objects.requireNonNull(warning);
         writer = new ProducerWriter(this.database, "atlas", limits.maximumPending(), limits.maximumFactBytes());
@@ -51,8 +51,9 @@ public final class WorldVisits {
     public void initialize() throws SQLException {
         writer.initialize();
         try (var c = database.getConnection(); var q = c.createStatement()) {
-            q.execute("CREATE TABLE IF NOT EXISTS atlas_logbook_visit_generation (backend VARCHAR(8) PRIMARY KEY,"
+            q.execute("CREATE TABLE IF NOT EXISTS atlas_logbook_visit_generation (backend VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,"
                 + "incarnation CHAR(36) NOT NULL) ENGINE=InnoDB");
+            nl.pixelretreat.atlas.storage.ServerIdentityColumns.widen(c,"atlas_logbook_visit_generation","backend");
         }
         var events = new ObservationPolicy.Registration(VISITS, ObservationPolicy.Mode.PARTIAL_EVENTS,
             "atlas-world-use", 1, backend);

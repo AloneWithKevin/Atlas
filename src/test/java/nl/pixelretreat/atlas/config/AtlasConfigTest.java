@@ -27,24 +27,17 @@ class AtlasConfigTest {
         }
     }
 
-    @Test void onlyEuAndNaNodesAreAcceptedAsTheCurrentPair() throws Exception {
-        AtlasConfig eu = AtlasConfig.read(shippedConfig());
-        assertEquals("EU", eu.region());
-        assertEquals("NA", eu.otherRegion());
-
-        YamlConfiguration northAmerica = shippedConfig();
-        northAmerica.set("server.region", "NA");
-        AtlasConfig na = AtlasConfig.read(northAmerica);
-        assertEquals("NA", na.region());
-        assertEquals("EU", na.otherRegion());
-
-        YamlConfiguration thirdNode = shippedConfig();
-        thirdNode.set("server.region", "APAC");
-        assertThrows(IllegalArgumentException.class, () -> AtlasConfig.read(thirdNode));
-
-        YamlConfiguration thirdProxy = shippedConfig();
-        thirdProxy.set("server.proxy-names.APAC", "survival-apac");
-        assertThrows(IllegalArgumentException.class, () -> AtlasConfig.read(thirdProxy));
+    @Test void exactServerIdentitiesAndArbitraryConfiguredRoutesAreAccepted() throws Exception {
+        var yaml=shippedConfig();var hub=AtlasConfig.read(yaml);
+        assertEquals("Hub01",hub.serverId());assertEquals(java.util.List.of("Survival01"),hub.remoteServers());
+        yaml.set("server.proxy-names.Survival02","survival-two");
+        var expanded=AtlasConfig.read(yaml);
+        assertEquals(java.util.List.of("Survival01","Survival02"),expanded.remoteServers());
+        assertTrue(expanded.routesTo("Survival02"));assertFalse(expanded.routesTo("survival02"));
+        assertFalse(expanded.routesTo("Hub01"));assertFalse(expanded.routesTo("unconfigured"));
+        yaml.set("server.id","Survival02");assertEquals("Survival02",AtlasConfig.read(yaml).serverId());
+        yaml.set("server.id","missing");assertThrows(IllegalArgumentException.class,()->AtlasConfig.read(yaml));
+        yaml.set("server.id","bad space");assertThrows(IllegalArgumentException.class,()->AtlasConfig.read(yaml));
     }
 
     @Test void tradingIsRequiredAndMustBeABoolean() throws Exception {

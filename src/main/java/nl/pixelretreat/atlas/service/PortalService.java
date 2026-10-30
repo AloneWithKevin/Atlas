@@ -236,7 +236,7 @@ public final class PortalService {
 
     private CompletableFuture<Travel> travelToServer(Player player, Portal portal) {
         String region = portal.target().region().orElseThrow();
-        if (!region.equals(config.otherRegion()) || config.proxyNames().get(region) == null) {
+        if (!config.routesTo(region)) {
             if (invalidTargetWarned.compareAndSet(false, true)) messages.warn("portal.invalid-region");
             return CompletableFuture.completedFuture(Travel.INVALID_TARGET);
         }

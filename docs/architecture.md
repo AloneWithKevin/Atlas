@@ -10,7 +10,7 @@ Closed access is stored separately from enabled state. Native original-player ad
 
 Postbox publishes `PostboxBootstrapIdentity` during `onLoad` from the exact validated `server` configuration value `EU` or `NA`. This is a bootstrap configuration fact, not evidence that Postbox's database, presence or routing service is ready; those start in `onEnable`. Atlas has `load: POSTWORLD` and depends on Postbox. Its `onLoad` compares the bootstrap identity with Atlas's configured region before resolving world folders, opening Hikari, initializing schema, running queued world operations or synchronizing the datapack. Missing or mismatched identity fails Atlas closed. Atlas retains its later live `VeyraCluster` region check as a separate runtime readiness check.
 
-MariaDB is the shared `pixelretreat_veyra` database; Atlas rows are partitioned by the validated local region. Each backend reads and mutates its own world, portal and keep-loaded records. Cross-region portal travel writes a one-use ticket for the target region; the destination consumes it conditionally. The current identity and peer contract accepts only the EU/NA pair and does not prove readiness for an additional node. See [multiserver support](multiserver.md).
+MariaDB is the shared `pixelretreat_veyra` database; Atlas rows are partitioned by the validated exact local server ID. Each backend reads and mutates its own world, portal and keep-loaded records. Cross-server portal travel writes a one-use ticket for the exact target server; the destination consumes it conditionally. Multiple configured servers may share a geographic region. Routing uses explicit server-to-proxy mappings. See [multiserver support](multiserver.md).
 
 ## Stored data
 

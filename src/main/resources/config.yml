@@ -1,12 +1,11 @@
-# Atlas configuration. Keep this file identical on EU and NA except server.region,
-# server.proxy-names (if they differ) and the database credentials.
+# Atlas uses exact Postbox server IDs, independently of geographic region.
 server:
-  # Postbox region of this server: EU or NA. Must equal Postbox's own setting.
-  region: "EU"
-  # Velocity server name of each region, used by cross-server portals.
+  # Must exactly match Postbox server.id on this installation.
+  id: "Hub01"
+  # Explicit server ID -> Velocity backend name. Include the local member.
   proxy-names:
-    EU: "survival"
-    NA: "survival-na"
+    Hub01: "Hub01"
+    Survival01: "Survival01"
 database:
   host: "127.0.0.1"
   port: 3306
