@@ -13,12 +13,12 @@ The Atlas configuration has these sections:
 | Key | Meaning and validated range |
 | --- | --- |
 | `server.id` | Exact actual Postbox server ID; case is preserved. |
-| `server.proxy-names.EU`, `server.proxy-names.NA` | Velocity server names for those two regions. |
+| `server.proxy-names` | Map of exact server IDs to registered Velocity backend names, including this server. |
 | `database.host`, `port`, `name`, `username`, `password`, `ssl-mode` | Shared MariaDB settings. SSL mode is `disable`, `trust`, `verify-ca` or `verify-full`. Repository credentials are blank. |
 | `datapack.pack-format` | Data-pack format for the running game version (121 for Veyra 26.3). |
 | `teleport.safe-search-radius` | Search radius around a vanilla spawn: 0–64 blocks. |
 | `portals.default-cooldown-millis` | Default for new portals: 0–600000 ms. |
-| `portals.travel-ticket-minutes` | Cross-region ticket validity: 1–60 minutes. |
+| `portals.travel-ticket-minutes` | Cross-server ticket validity: 1–60 minutes. |
 | `portals.max-fill-blocks` | Largest fill volume: 1–65536 blocks. |
 | `keep-loaded.max-chunks-per-region` | Largest saved region: 1–65536 chunks. |
 | `default-flags.<flag>` | Boolean default for each of the 25 world flags. |
