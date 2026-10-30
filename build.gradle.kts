@@ -64,6 +64,7 @@ tasks.withType<JavaCompile>().configureEach { options.encoding = "UTF-8" }
 tasks.test {
     useJUnitPlatform()
     systemProperty("pixelretreatWorkspace", file(workspaceRoot).absolutePath)
+    systemProperty("logbookWebsiteTestSource", providers.gradleProperty("logbookWebsiteTestSource").getOrElse(file("$workspaceRoot/Logbook/website").absolutePath))
     val scratch = layout.buildDirectory.dir("tmp/junit").get().asFile
     doFirst { scratch.mkdirs() }
     systemProperty("java.io.tmpdir", scratch.absolutePath)
