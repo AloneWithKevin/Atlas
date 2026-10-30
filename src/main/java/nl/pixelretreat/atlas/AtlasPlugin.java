@@ -36,6 +36,7 @@ import nl.pixelretreat.atlas.service.SelectionService;
 import nl.pixelretreat.atlas.service.StartupOperations;
 import nl.pixelretreat.atlas.service.TeleportService;
 import nl.pixelretreat.atlas.service.WorldAdminService;
+import nl.pixelretreat.atlas.world.WorldNames;
 import nl.pixelretreat.atlas.statistics.AtlasStatistics;
 import nl.pixelretreat.atlas.storage.AtlasRepository;
 import nl.pixelretreat.atlas.world.DatapackWriter;
@@ -79,6 +80,9 @@ public final class AtlasPlugin extends JavaPlugin {
     private volatile ClosetService closet;
     private volatile ContentRegistration closetRegistration;
     private volatile KeepLoadedService keepLoaded;
+    private volatile dev.veyra.api.WorldLifecycle.Registration refusalRenderer;
+    private volatile AtlasMessages liveMessages;
+    private long refusalGeneration;
     private volatile AtlasStatistics statistics;
     private volatile nl.pixelretreat.atlas.statistics.WorldVisits worldVisits;
     private final AtomicBoolean visitFlushQueued = new AtomicBoolean();
@@ -280,6 +284,7 @@ public final class AtlasPlugin extends JavaPlugin {
         }
         try {
             AtlasMessages messages = new AtlasMessages(this, Objects.requireNonNull(catalog), delivery);
+            liveMessages = messages;
             reportStartup(messages);
             SelectionService selections = new SelectionService();
             SelectorDeliveryService selectors = new SelectorDeliveryService(this, closet, deliveries, compass);
@@ -293,6 +298,7 @@ public final class AtlasPlugin extends JavaPlugin {
                     folders(settings), portals, regions);
             var access = new nl.pixelretreat.atlas.service.WorldAccessService(this, repository, rules,
                     teleports, dev.veyra.api.Veyra.worlds(), messages);
+            publishRefusalRenderer(refusalGeneration);
             access.publishStored();
             worlds.runtime(this, dev.veyra.api.Veyra.worlds(), access);
             getServer().getPluginManager().registerEvents(access, this);
@@ -344,11 +350,25 @@ public final class AtlasPlugin extends JavaPlugin {
     }
 
     private CompletableFuture<Void> reloadAll(RulesService rules, PortalService portals, KeepLoadedService regions) {
+        final long generation = withdrawRefusalRenderer();
         return campfire.reload(this, AtlasMessages::validateCatalog).toCompletableFuture()
                 .thenCompose(ignored -> authoredLocalization.reload(this).toCompletableFuture())
                 .thenCompose(ignored -> rules.reload())
                 .thenCompose(ignored -> CompletableFuture.allOf(portals.reload(), regions.reload()))
-                .thenRun(rules::applyAll);
+                .thenRun(rules::applyAll)
+                .whenComplete((done, failure) -> publishRefusalRenderer(generation));
+    }
+
+    private synchronized long withdrawRefusalRenderer() {
+        if (refusalRenderer != null) refusalRenderer.close();
+        refusalRenderer = null;
+        return ++refusalGeneration;
+    }
+
+    private synchronized void publishRefusalRenderer(long generation) {
+        if (stopped.get() || !isEnabled() || generation != refusalGeneration || refusalRenderer != null) return;
+        refusalRenderer = dev.veyra.api.Veyra.worlds().publishRefusalRenderer(this, (recipient, world) ->
+                liveMessages.render(recipient, "world.closed-entry", Map.of("world", WorldNames.shortName(world.toString()))));
     }
 
     private void reportStartup(AtlasMessages messages) {
@@ -384,6 +404,7 @@ public final class AtlasPlugin extends JavaPlugin {
     /** Releases tickets, workers and service registrations; never touches the server lifecycle. */
     @Override public void onDisable() {
         stopped.set(true);
+        withdrawRefusalRenderer();
         getServer().getServicesManager().unregisterAll(this);
         if (keepLoaded != null) keepLoaded.releaseAll();
         if (statistics != null) statistics.closeCapture();

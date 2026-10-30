@@ -426,8 +426,9 @@ public final class AtlasCommand implements TabExecutor {
         if (action.equals("list")) {
             if (s.portals().index().all().isEmpty()) { messages.send(sender, "portal.list-empty"); return; }
             s.portals().index().all().stream().sorted((a, b) -> a.name().compareTo(b.name())).forEach(portal ->
-                    messages.send(sender, "portal.list-entry", Map.of("portal", portal.name(),
-                            "world", WorldNames.shortName(portal.world()), "target", messages.destination(portal.target()))));
+                    messages.sendCompound(sender, "portal.list-entry", Map.of("portal", portal.name(),
+                            "world", WorldNames.shortName(portal.world())),
+                            Map.of("target", messages.destinationReference(portal.target()))));
             return;
         }
         if (args.length < 2 || !PORTAL.contains(action)) { messages.send(sender, "usage.portal"); return; }
@@ -465,11 +466,11 @@ public final class AtlasCommand implements TabExecutor {
                 Optional<Portal> found = s.portals().index().named(name);
                 if (found.isEmpty()) { messages.send(sender, "portal.not-found", named); return; }
                 Portal portal = found.get();
-                messages.send(sender, "portal.info", Map.of("portal", name, "world", WorldNames.shortName(portal.world()),
-                        "bounds", messages.bounds(portal),
-                        "target", messages.destination(portal.target()), "cooldown", Integer.toString(portal.cooldownMillis()),
+                messages.sendCompound(sender, "portal.info", Map.of("portal", name, "world", WorldNames.shortName(portal.world()),
+                        "cooldown", Integer.toString(portal.cooldownMillis()),
                         "sound", portal.sound().orElse("-"), "particle", portal.particle().orElse("-"),
-                        "restricted", Boolean.toString(portal.restricted()), "fill", portal.fillBlock().orElse("-")));
+                        "restricted", Boolean.toString(portal.restricted()), "fill", portal.fillBlock().orElse("-")),
+                        Map.of("bounds", messages.boundsReference(portal), "target", messages.destinationReference(portal.target())));
             }
             case "target" -> portalTarget(sender, s, name, Arrays.copyOfRange(args, 2, args.length));
             case "cooldown" -> {
@@ -587,18 +588,24 @@ public final class AtlasCommand implements TabExecutor {
         }
         PortalTarget chosen = target;
         update(sender, s, name, portal -> portal.withTarget(chosen), "portal.target-set", "portal_target",
-                Map.of("portal", name, "target", messages.destination(chosen)));
+                Map.of("portal", name), Map.of("target", messages.destinationReference(chosen)));
     }
 
     private void update(CommandSender sender, Services s, String name, java.util.function.UnaryOperator<Portal> change,
                         String successKey, String action, Map<String, String> values) {
+        update(sender, s, name, change, successKey, action, values, Map.of());
+    }
+
+    private void update(CommandSender sender, Services s, String name, java.util.function.UnaryOperator<Portal> change,
+                        String successKey, String action, Map<String, String> values,
+                        Map<String, nl.pixelretreat.campfire.api.KeyReference> references) {
         CompletableFuture<Optional<Portal>> future = s.portals().update(name, change);
         observeAdmin(s, sender, action, future,
                 (updated, failure) -> failure != null ? "failed" : updated == null || updated.isEmpty() ? "not_found" : "updated");
         future.whenComplete((updated, failure) -> {
             if (failure != null) messages.send(sender, "common.failed");
             else if (updated.isEmpty()) messages.send(sender, "portal.not-found", Map.of("portal", name));
-            else messages.send(sender, successKey, values);
+            else messages.sendCompound(sender, successKey, values, references);
         });
     }
 

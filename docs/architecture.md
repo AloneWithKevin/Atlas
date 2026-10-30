@@ -44,7 +44,9 @@ The origin validates the player and route, reserves a ticket in the original por
 
 ## Campfire and Closet
 
-Atlas registers its authored catalog with Campfire before delivering messages, and uses Campfire's public delivery API. The verified current route renders the authored Atlas strings in English even after a locale change; Atlas does not claim translated Atlas prose.
+Atlas registers its authored catalog with Campfire before delivering messages, and uses Campfire's public delivery API. Portal destination and bounds descriptions remain keyed references until compound delivery, sharing the enclosing message's recipient language and catalog snapshot. Console replies use the English catalog. World names, coordinates, command tokens and setting identifiers remain literal values.
+
+Atlas publishes a message-only refusal renderer through `WorldLifecycle.publishRefusalRenderer`. Native final join/respawn refusals render `world.closed-entry` for the original recipient UUID and refused world without requiring an online Bukkit player. Veyra bounds requests and retains the static refusal on failure, timeout or stale registration. Reload withdraws the registration and fences earlier callbacks before publishing the current renderer; disable withdraws it. Successful admission and teleport decisions do not wait for message rendering. This requires the matching native API/runtime release.
 
 Atlas registers `atlas:selector` and the selector lore glyph through Closet's public asset-registration contract. The definitions stay with Atlas. Closet owns and supplies every pack asset; Atlas does not own a texture, font, model or sound file.
 
