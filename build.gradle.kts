@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "nl.pixelretreat"
-version = "0.1.13"
+version = "0.2.0"
 
 repositories {
     mavenCentral()
@@ -17,7 +17,7 @@ val veyra = files(providers.gradleProperty("veyraApiJar").getOrElse("$workspaceR
 val campfire = files(providers.gradleProperty("campfireApiJar").getOrElse("../.build-deps/campfire-api-current.jar"))
 val closet = files(providers.gradleProperty("closetApiJar").getOrElse("../.build-deps/closet-api-pack-owner.jar"))
 val compass = files(providers.gradleProperty("compassApiJar").getOrElse("$workspaceRoot/.build-deps/compass-api-current.jar"))
-val postbox = files(providers.gradleProperty("postboxApiJar").getOrElse("../Postbox/build/libs/Postbox-0.1.0-api.jar"))
+val postbox = files(providers.gradleProperty("postboxApiJar").getOrElse("../Postbox/build/libs/Postbox-0.2.0-api.jar"))
 val logbookClient = files(providers.gradleProperty("logbookClientJar").getOrElse("../Logbook/client/build/libs/client-0.1.0.jar"))
 val logbookCore = files(providers.gradleProperty("logbookCoreJar").getOrElse("../Logbook/core/build/libs/core-0.1.0.jar"))
 val logbookApi = files(providers.gradleProperty("logbookApiJar").getOrElse("../Logbook/api/build/libs/api-0.1.0.jar"))
@@ -64,6 +64,7 @@ tasks.withType<JavaCompile>().configureEach { options.encoding = "UTF-8" }
 tasks.test {
     useJUnitPlatform()
     systemProperty("pixelretreatWorkspace", file(workspaceRoot).absolutePath)
+    systemProperty("logbookWebsiteTestSource", providers.gradleProperty("logbookWebsiteTestSource").getOrElse(file("$workspaceRoot/Logbook/website").absolutePath))
     val scratch = layout.buildDirectory.dir("tmp/junit").get().asFile
     doFirst { scratch.mkdirs() }
     systemProperty("java.io.tmpdir", scratch.absolutePath)

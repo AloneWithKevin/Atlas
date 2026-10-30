@@ -16,7 +16,7 @@ The full old-plugin inventory and owner decision record is preserved in [the ori
 | Portals | Selected cuboid, same-backend spawn/location or EU/NA cross-region target, cooldown, sound, particle, optional permission and ordinary-block fill. | Extended. |
 | Keep-loaded regions | Selected X/Z chunk rectangle with configured cap and plugin chunk tickets. | Preserved. |
 | Help and tab completion | `/atlas` help and sender-aware completions for supported argument positions. | Preserved and adapted. |
-| Messages | Authored Campfire catalog, stable message keys and selector name/lore. | Preserved; actual current authored rendering is English. |
+| Messages | Authored Campfire catalog, stable message keys and selector name/lore. | Recipient-language messages and compound portal descriptions through Campfire; console English and selector definitions preserved. Native final refusals require the matching Veyra hook. |
 | Selector | Closet item `atlas:selector`; public Closet delivery and exact overflow handling. | Preserved and provider-owned. |
 | Public rules API | Typed `AtlasRules` and `AtlasFlag` service for world rules and spawn origin. | Replaces `PixelWorldsApi` and reflective `worldService()`. |
 | GUI, custom blocks and recipes | None. There was no legacy Atlas GUI to restore; selector interaction is in-game corner selection. | No GUI or custom item-production feature. |

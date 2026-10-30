@@ -22,7 +22,7 @@ The `trading` flag is the per-world Handshake policy. `AtlasFlag.TRADING` and `A
 
 Use `allowsSpawn(world, entityType, SpawnOrigin.PLUGIN)` before consuming a durable item or completing a plugin-owned spawn. Atlas's listener applies the same policy to actual `CUSTOM` spawns. Preserve the original operation result when a spawn is refused or cannot be established; do not turn an unavailable Atlas answer into permission to proceed.
 
-Current integrations are tracked in the workspace [plugin integration register](../../PLUGIN_INTEGRATIONS.md). EU/NA are the only supported Postbox region identities today; see [multiserver support](multiserver.md) before designing another node.
+Current integrations are tracked in the workspace [plugin integration register](../../PLUGIN_INTEGRATIONS.md). Exact server identities are independent of region; see [multiserver support](multiserver.md) for configured routes and the retained travel uncertainty boundary.
 
 ## Local world access
 

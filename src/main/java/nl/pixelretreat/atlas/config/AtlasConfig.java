@@ -11,7 +11,7 @@ import org.bukkit.configuration.file.FileConfiguration;
 
 /** Immutable, validated settings read once at startup. A missing or invalid value stops Atlas. */
 public record AtlasConfig(
-        String region, Map<String, String> proxyNames,
+        String serverId, Map<String, String> proxyNames,
         String databaseHost, int databasePort, String databaseName, String databaseUsername,
         String databasePassword, String databaseSslMode,
         int packFormat, int safeSearchRadius, int defaultCooldownMillis, int travelTicketMinutes,
@@ -29,7 +29,11 @@ public record AtlasConfig(
         ConfigurationSection proxies = source.getConfigurationSection("server.proxy-names");
         if (proxies == null) throw new IllegalArgumentException("Missing server.proxy-names");
         Map<String, String> proxyNames = new java.util.HashMap<>();
-        for (String region : proxies.getKeys(false)) proxyNames.put(region, required(proxies, region));
+        for (var entry : proxies.getValues(false).entrySet()) {
+            if (!(entry.getValue() instanceof String name) || name.isBlank())
+                throw new IllegalArgumentException("Invalid proxy name");
+            proxyNames.put(entry.getKey(),name);
+        }
         Map<AtlasFlag, Boolean> flags = new EnumMap<>(AtlasFlag.class);
         for (AtlasFlag flag : AtlasFlag.values()) {
             String path = "default-flags." + flag.key();
@@ -37,7 +41,7 @@ public record AtlasConfig(
             flags.put(flag, source.getBoolean(path));
         }
         var value = new AtlasConfig(
-                required(source, "server.region"), proxyNames,
+                required(source, "server.id"), proxyNames,
                 required(source, "database.host"), source.getInt("database.port"),
                 required(source, "database.name"), required(source, "database.username"),
                 Objects.requireNonNull(source.getString("database.password"), "database.password"),
@@ -59,7 +63,8 @@ public record AtlasConfig(
     }
 
     private void validate() {
-        if (!region.matches("EU|NA") || !proxyNames.keySet().equals(Set.of("EU", "NA"))
+        if (!validServerId(serverId) || proxyNames.isEmpty() || proxyNames.size()>128
+                || !proxyNames.containsKey(serverId) || proxyNames.keySet().stream().anyMatch(id->!validServerId(id))
                 || databasePort < 1 || databasePort > 65535
                 || !databaseSslMode.matches("disable|trust|verify-ca|verify-full")
                 || packFormat < 1 || safeSearchRadius < 0 || safeSearchRadius > 64
@@ -77,13 +82,15 @@ public record AtlasConfig(
 
     /** Diagnostics never include the database password. */
     @Override public String toString() {
-        return "AtlasConfig[region=" + region + ", proxyNames=" + proxyNames + ", database=***, packFormat="
+        return "AtlasConfig[serverId=" + serverId + ", proxyNames=" + proxyNames + ", database=***, packFormat="
                 + packFormat + ", safeSearchRadius=" + safeSearchRadius + ", defaultCooldownMillis="
                 + defaultCooldownMillis + ", travelTicketMinutes=" + travelTicketMinutes + ", maxFillBlocks="
                 + maxFillBlocks + ", maxChunksPerRegion=" + maxChunksPerRegion + ", defaultFlags=" + defaultFlags
                 + ", workerThreads=" + workerThreads + ", workerQueueSize=" + workerQueueSize + "]";
     }
 
-    /** The other Postbox region. */
-    public String otherRegion() { return region.equals("EU") ? "NA" : "EU"; }
+    /** An explicitly configured remote server; region does not select a destination. */
+    public boolean routesTo(String target) { return target!=null && !target.equals(serverId) && proxyNames.containsKey(target); }
+    public java.util.List<String> remoteServers() { return proxyNames.keySet().stream().filter(this::routesTo).sorted().toList(); }
+    public static boolean validServerId(String id) { return id!=null && id.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}"); }
 }

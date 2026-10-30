@@ -13,6 +13,7 @@ import nl.pixelretreat.campfire.api.CampfireDelivery;
 import nl.pixelretreat.campfire.api.DeliveryOptions;
 import nl.pixelretreat.campfire.api.DeliveryResult;
 import nl.pixelretreat.campfire.api.MessageCatalog;
+import nl.pixelretreat.campfire.api.KeyReference;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
@@ -142,14 +143,24 @@ public final class AtlasMessages {
 
     /** Sends a keyed message; inserted values are plain text and never parsed. Any thread. */
     public void send(CommandSender sender, String key, Map<String, String> values) {
+        sendCompound(sender, key, values, Map.of());
+    }
+
+    /** Nested prose and its enclosing message share the recipient language and catalog snapshot. */
+    public void sendCompound(CommandSender sender, String key, Map<String, String> values, Map<String, KeyReference> references) {
+        sendSnapshot(sender, key, Map.copyOf(values), Map.copyOf(references));
+    }
+
+    private void sendSnapshot(CommandSender sender, String key, Map<String, String> values, Map<String, KeyReference> references) {
         if (!owner.isEnabled()) return;
         if (sender instanceof Player player) {
             UUID id = player.getUniqueId();
             CompletableFuture<Void> queued = playerQueues.compute(id, (ignored, previous) -> {
                 CompletableFuture<Void> tail = previous == null ? CompletableFuture.completedFuture(null)
                         : previous.handle((done, failure) -> null);
-                CompletableFuture<Void> next = tail.thenCompose(done -> delivery
-                        .send(owner, player, key, values, Map.of(), DeliveryOptions.serverChat())
+                CompletableFuture<Void> next = tail.thenCompose(done -> (references.isEmpty()
+                        ? delivery.send(owner, player, key, values, Map.of(), DeliveryOptions.serverChat())
+                        : delivery.sendCompound(owner, player, key, values, Map.of(), references, DeliveryOptions.serverChat()))
                         .thenAccept(result -> {
                             if (result == DeliveryResult.SENT) { deliveryFailureLogged.set(false); return; }
                             if (result == DeliveryResult.RECIPIENT_OFFLINE || result == DeliveryResult.OWNER_DISABLED) return;
@@ -165,7 +176,12 @@ public final class AtlasMessages {
             });
             if (queued.isDone()) playerQueues.remove(id, queued);
         } else {
-            owner.getServer().getGlobalRegionScheduler().run(owner, ignored -> sender.sendMessage(catalog.get(key, values)));
+            owner.getServer().getGlobalRegionScheduler().run(owner, ignored -> {
+                Map<String, net.kyori.adventure.text.Component> nested = new HashMap<>();
+                references.forEach((name, reference) -> nested.put(name,
+                        catalog.getRich(reference.key(), reference.text(), reference.components())));
+                sender.sendMessage(catalog.getRich(key, values, nested));
+            });
         }
     }
 
@@ -183,6 +199,12 @@ public final class AtlasMessages {
 
     public net.kyori.adventure.text.Component render(String key, Map<String, String> values) {
         return catalog.get(key, values);
+    }
+
+    /** UUID rendering also supports original native connections before the player has joined. */
+    public java.util.concurrent.CompletionStage<net.kyori.adventure.text.Component> render(
+            UUID recipient, String key, Map<String, String> values) {
+        return delivery.render(owner, recipient, key, values, Map.of());
     }
 
     /** A message with placeholders as plain text for the console. */
@@ -206,6 +228,11 @@ public final class AtlasMessages {
 
     /** Nested descriptions are plain text; the enclosing message keeps its target color. */
     public String destination(PortalTarget target) {
+        KeyReference reference = destinationReference(target);
+        return plain(reference.key(), reference.text());
+    }
+
+    public KeyReference destinationReference(PortalTarget target) {
         Map<String, String> values = new HashMap<>();
         values.put("world", nl.pixelretreat.atlas.world.WorldNames.shortName(target.world()));
         boolean remote = target.kind() == PortalTarget.Kind.SERVER;
@@ -215,17 +242,22 @@ public final class AtlasMessages {
             values.put("y", Integer.toString((int) point.y()));
             values.put("z", Integer.toString((int) point.z()));
         });
-        if (remote) return plain(target.point().isPresent()
-                ? "destination.remote-location" : "destination.remote-spawn", values);
-        return plain(target.point().isPresent()
-                ? "destination.local-location" : "destination.local-spawn", values);
+        if (remote) return new KeyReference(target.point().isPresent()
+                ? "destination.remote-location" : "destination.remote-spawn", values, Map.of());
+        return new KeyReference(target.point().isPresent()
+                ? "destination.local-location" : "destination.local-spawn", values, Map.of());
     }
 
     /** Existing integer bounds and direction are retained exactly. */
     public String bounds(Portal portal) {
-        return plain("destination.bounds", Map.of(
+        KeyReference reference = boundsReference(portal);
+        return plain(reference.key(), reference.text());
+    }
+
+    public KeyReference boundsReference(Portal portal) {
+        return new KeyReference("destination.bounds", Map.of(
                 "minx", Integer.toString(portal.minX()), "miny", Integer.toString(portal.minY()),
                 "minz", Integer.toString(portal.minZ()), "maxx", Integer.toString(portal.maxX()),
-                "maxy", Integer.toString(portal.maxY()), "maxz", Integer.toString(portal.maxZ())));
+                "maxy", Integer.toString(portal.maxY()), "maxz", Integer.toString(portal.maxZ())), Map.of());
     }
 }

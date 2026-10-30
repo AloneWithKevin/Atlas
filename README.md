@@ -2,7 +2,7 @@
 
 Atlas replaces PixelWorlds and manages per-world rules, datapack-declared worlds, portals, safe teleports and keep-loaded regions on Veyra.
 
-The current implementation supports the EU and NA Postbox regions. Each backend uses its region identity in the shared `pixelretreat_veyra` MariaDB database. Cross-region portal travel uses Postbox's current EU/NA contract and Velocity routing. Atlas is not yet ready for arbitrary additional server identities: Postbox and Atlas configuration currently accept only EU and NA. See [multiserver support](docs/multiserver.md) for the verified boundary.
+Each backend uses its exact Postbox server ID in the shared `pixelretreat_veyra` MariaDB database. Multiple servers may share a geographic region. Cross-server portals use explicit server-to-Velocity mappings and one-use destination tickets. See [multiserver support](docs/multiserver.md) for configuration and the limits of proxy delivery confirmation.
 
 Atlas declares worlds in its data pack for startup and uses Veyra's public world lifecycle for runtime enable/disable. Existing initialized worlds can be loaded and unloaded without restarting. Create and first terrain generation remain startup operations; clone/reset retain verified preparation and activation across starts. Close/open changes player access while keeping a world loaded. Complete native world-save folders can be copied intact under `<level>/dimensions/atlas/<name>` while that world is safely disabled.
 

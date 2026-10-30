@@ -6,7 +6,7 @@ import nl.pixelretreat.atlas.world.SpawnPoint;
 /**
  * Where a portal sends players.
  *
- * @param region the other Postbox region for {@link Kind#SERVER}; empty for local targets
+ * @param region the exact configured remote server ID for {@link Kind#SERVER}; empty for local targets
  * @param world  the destination world key on the destination server
  * @param point  an exact destination; empty means the destination world's spawn
  */
@@ -17,12 +17,12 @@ public record PortalTarget(Kind kind, Optional<String> region, String world, Opt
         SPAWN,
         /** An exact location on this server. */
         LOCATION,
-        /** A world (spawn or exact location) on the other server, reached through the proxy. */
+        /** A world (spawn or exact location) on the configured remote server, reached through the proxy. */
         SERVER
     }
 
     public PortalTarget {
-        if (kind == Kind.SERVER && region.isEmpty()) throw new IllegalArgumentException("Server target needs a region");
+        if (kind == Kind.SERVER && (region.isEmpty() || !nl.pixelretreat.atlas.config.AtlasConfig.validServerId(region.get()))) throw new IllegalArgumentException("Server target needs a region");
         if (kind != Kind.SERVER && region.isPresent()) throw new IllegalArgumentException("Local target has no region");
         if (kind == Kind.LOCATION && point.isEmpty()) throw new IllegalArgumentException("Location target needs a point");
         if (kind == Kind.SPAWN && point.isPresent()) throw new IllegalArgumentException("Spawn target has no point");

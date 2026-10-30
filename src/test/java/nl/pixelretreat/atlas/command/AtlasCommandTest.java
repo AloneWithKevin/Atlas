@@ -69,7 +69,8 @@ class AtlasCommandTest {
         var portals = mock(nl.pixelretreat.atlas.service.PortalService.class);
         when(portals.update(anyString(), any())).thenReturn(CompletableFuture.completedFuture(java.util.Optional.empty()));
         var messages = mock(AtlasMessages.class);
-        when(messages.destination(any())).thenReturn("NA:arena 1,64,2");
+        when(messages.destinationReference(any())).thenReturn(new nl.pixelretreat.campfire.api.KeyReference(
+                "destination.remote-location", Map.of("region", "NA", "world", "arena", "x", "1", "y", "64", "z", "2"), Map.of()));
         var command = new AtlasCommand(null, messages, new AtlasCommand.Services(
                 config(true), null, null, null, portals, null, null, null, null));
         command.onCommand(admin(), null, "atlas", new String[]{"portal", "target", "gate", "server", "NA", "arena", "1", "64", "2"});

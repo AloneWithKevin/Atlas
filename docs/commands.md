@@ -2,7 +2,7 @@
 
 All management commands use `/atlas` and require `atlas.admin`; OP is explicitly admitted. Players normally use portals directly. The Atlas Selector is issued only by staff through `/atlas selector`; its plain-text overflow recovery message tells the recipient to run `/overflow` when inventory space is available. It has no clickable command action.
 
-World names contain 1–48 lowercase letters, numbers, underscores or hyphens. World arguments accept the vanilla names `overworld`, `nether`/`the_nether` and `end`/`the_end`, or an Atlas world name/key. Commands run on the local backend; teleport targets are online players on that backend unless the command explicitly describes a cross-region portal destination.
+World names contain 1–48 lowercase letters, numbers, underscores or hyphens. World arguments accept the vanilla names `overworld`, `nether`/`the_nether` and `end`/`the_end`, or an Atlas world name/key. Commands run on the local backend; teleport targets are online players on that backend unless the command explicitly describes a cross-server portal destination.
 
 ## World management
 
@@ -56,7 +56,7 @@ An authorized staff member runs `/atlas selector [online-local-player]`. In game
 | `/atlas portal target <name> spawn <world>` | Sets a same-backend world-spawn target. |
 | `/atlas portal target <name> here` | Uses the player's current position and direction. |
 | `/atlas portal target <name> location <world> <x> <y> <z> <yaw> <pitch>` | Sets an explicit same-backend destination; all coordinates are required in console. |
-| `/atlas portal target <name> server <EU\|NA> <world> [x y z [yaw pitch]]` | Sets a cross-region destination at its spawn or a specified position. The configured proxy name and active route must match. |
+| `/atlas portal target <name> server <server-id> <world> [x y z [yaw pitch]]` | Sets an explicitly configured remote server destination at its spawn or a specified position. The configured proxy name and active route must match. |
 | `/atlas portal cooldown <name> <millis>` | Sets the per-player portal cooldown (0–600000 ms; new portals use the configured default). |
 | `/atlas portal sound <name> <namespaced-key\|none>` | Sets a registered sound or clears it. |
 | `/atlas portal particle <name> <PARTICLE\|none>` | Sets a particle that requires no extra data or clears it. |
@@ -71,9 +71,9 @@ An authorized staff member runs `/atlas selector [online-local-player]`. In game
 
 ## Completion and input rules
 
-Completion follows the current command position and sender access. It suggests current world names, portal/region names, valid generators, flag/setting values, supported regions, registry-backed sound/material names and particles without extra data. Console variants include their required explicit world and coordinate arguments. Once a remote region value is invalid, completion does not suggest destination worlds for it. Coordinates and new names remain free input; Atlas validates them when executing the command.
+Completion follows the current command position and sender access. It suggests current world names, portal/region names, valid generators, flag/setting values, configured remote server IDs, registry-backed sound/material names and particles without extra data. Console variants include their required explicit world and coordinate arguments. Once a remote server ID is invalid, completion does not suggest destination worlds for it. Coordinates and new names remain free input; Atlas validates them when executing the command.
 
-Non-finite coordinates, reversed bounds, coordinate overflow, and portal volumes that overflow or exceed the configured cap are refused. A remote destination must name the other current EU/NA region. Permission is checked when the command executes and, for player movement, again at the entity-owned callback.
+Non-finite coordinates, reversed bounds, coordinate overflow, and portal volumes that overflow or exceed the configured cap are refused. A remote destination must name an explicitly configured server other than the local server. Permission is checked when the command executes and, for player movement, again at the entity-owned callback.
 
 There is no Atlas inventory GUI. The in-game selector is a two-corner tool, not a menu.
 

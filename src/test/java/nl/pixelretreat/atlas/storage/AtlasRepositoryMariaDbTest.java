@@ -29,6 +29,48 @@ import org.junit.jupiter.api.io.TempDir;
 final class AtlasRepositoryMariaDbTest {
     @TempDir Path dimensions;
 
+    @Test void threeExactServersKeepIndependentWorldsAndTargetedSingleUseTickets()throws Exception {
+        String url=System.getenv("ATLAS_TEST_JDBC_URL");assumeTrue(url!=null&&!url.isBlank());
+        var config=new HikariConfig();config.setJdbcUrl(url);config.setUsername("root");config.setMaximumPoolSize(3);
+        try(var pool=new HikariDataSource(config)) {
+            var hub=new AtlasRepository(pool,"Hub01");var first=new AtlasRepository(pool,"Survival01");var second=new AtlasRepository(pool,"Survival02");
+            hub.initialize();first.initialize();second.initialize();
+            String world="atlas:generic_"+UUID.randomUUID().toString().replace("-","");
+            assertTrue(hub.insertWorld(world,WorldGenerator.VOID,Optional.empty()));
+            assertTrue(first.insertWorld(world,WorldGenerator.FLAT,Optional.empty()));
+            assertTrue(second.insertWorld(world,WorldGenerator.VOID,Optional.empty()));
+            assertEquals(WorldGenerator.FLAT,first.loadWorlds().get(world).generator().orElseThrow());
+            UUID player=UUID.randomUUID();
+            var a=new TravelTicket(UUID.randomUUID(),player,"first",world,Optional.empty());
+            var b=new TravelTicket(UUID.randomUUID(),player,"second",world,Optional.empty());
+            hub.issueTicket(a,"Survival01",Instant.now().plusSeconds(60),world);
+            hub.issueTicket(b,"Survival02",Instant.now().plusSeconds(60),world);
+            assertEquals(b,second.takeTicket(player).orElseThrow());assertTrue(second.takeTicket(player).isEmpty());
+            assertEquals(a,first.takeTicket(player).orElseThrow());assertTrue(first.takeTicket(player).isEmpty());
+            assertTrue(hub.takeTicket(player).isEmpty());
+        }
+    }
+
+    @Test void wideningPreservesHistoricalIdentityBytesAndAcceptsExactMaximumLength()throws Exception {
+        String url=System.getenv("ATLAS_TEST_JDBC_URL");assumeTrue(url!=null&&!url.isBlank());
+        var config=new HikariConfig();config.setJdbcUrl(url);config.setUsername("root");config.setMaximumPoolSize(2);
+        try(var pool=new HikariDataSource(config);var c=pool.getConnection();var q=c.createStatement()) {
+            q.executeUpdate("CREATE TABLE atlas_identity_width_test(server VARCHAR(8) PRIMARY KEY,target_region VARCHAR(8) NULL,payload VARBINARY(8) NOT NULL) ENGINE=InnoDB");
+            try {
+                q.executeUpdate("INSERT INTO atlas_identity_width_test VALUES('EU','NA',X'00FF42'),('NA',NULL,X'10AA')");
+                ServerIdentityColumns.widen(c,"atlas_identity_width_test","server","target_region");
+                ServerIdentityColumns.widen(c,"atlas_identity_width_test","server","target_region");
+                try(var rows=q.executeQuery("SELECT HEX(server),HEX(target_region),HEX(payload) FROM atlas_identity_width_test ORDER BY server")) {
+                    assertTrue(rows.next());assertEquals("4555",rows.getString(1));assertEquals("4E41",rows.getString(2));assertEquals("00FF42",rows.getString(3));
+                    assertTrue(rows.next());assertEquals("4E41",rows.getString(1));assertNull(rows.getString(2));assertEquals("10AA",rows.getString(3));
+                }
+                try(var insert=c.prepareStatement("INSERT INTO atlas_identity_width_test VALUES(?,NULL,X'01')")) {
+                    insert.setString(1,"S".repeat(64));assertEquals(1,insert.executeUpdate());
+                }
+            }finally {q.executeUpdate("DROP TABLE atlas_identity_width_test");}
+        }
+    }
+
     @Test void worldsPortalsRegionsTicketsAndStartupOperations() throws Exception {
         String url = System.getenv("ATLAS_TEST_JDBC_URL");
         assumeTrue(url != null && !url.isBlank(), "Set an isolated ATLAS_TEST_JDBC_URL to run MariaDB tests");

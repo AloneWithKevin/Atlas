@@ -130,8 +130,8 @@ final class AtlasStatisticsMariaDbTest {
             AtlasRepository eu = new AtlasRepository(pool, "EU");
             eu.initialize();
             assertThrows(IllegalArgumentException.class,
-                    () -> new AtlasStatistics(pool, ProducerLimits.APPROVED_START, "eu", 64, () -> { }),
-                    "backend aliases must not invent separate collection identities");
+                    () -> new AtlasStatistics(pool, ProducerLimits.APPROVED_START, "invalid space", 64, () -> { }),
+                    "invalid server IDs must not create collection identities");
             AtlasStatistics euStats = statistics(pool, "EU", new ProducerLimits(5, 32768), workers);
             eu.statistics(euStats);
 
@@ -322,7 +322,7 @@ final class AtlasStatisticsMariaDbTest {
                     Optional.empty(), Optional.empty(), java.util.Map.of("phase", "terminal", "outcome", "arrived"));
             var absent = new nl.pixelretreat.logbook.api.StatisticsQuery("atlas:unmeasured", 1, Optional.empty(),
                     Optional.empty(), Optional.empty(), java.util.Map.of());
-            var reads = new nl.pixelretreat.logbook.core.ReadRepository(pool, new nl.pixelretreat.logbook.core.ReadLimits(100, 100, 100, 30));
+            var reads = new nl.pixelretreat.logbook.core.ReadRepository(pool, new nl.pixelretreat.logbook.core.ReadLimits(100,100,100,30),new nl.pixelretreat.logbook.core.CoverageSources(java.util.Set.of("EU","NA"),java.util.Map.of()));
             var values = reads.read(java.util.Set.of(query, absent));
             assertEquals(new java.math.BigDecimal("1"), values.get(query).value().orElseThrow());
             assertEquals(nl.pixelretreat.logbook.api.StatisticValue.Status.UNKNOWN, values.get(absent).status());
@@ -558,7 +558,7 @@ final class AtlasStatisticsMariaDbTest {
             visits.flush(); visits.flush();
             try (var c = db.getConnection()) { nl.pixelretreat.logbook.core.ProjectionSchema.initialize(c); }
             var ingest = new nl.pixelretreat.logbook.core.IngestRepository(db); ingest.drain("atlas",100);
-            var reads = new nl.pixelretreat.logbook.core.ReadRepository(db,new nl.pixelretreat.logbook.core.ReadLimits(100,100,100,30));
+            var reads = new nl.pixelretreat.logbook.core.ReadRepository(db,new nl.pixelretreat.logbook.core.ReadLimits(100,100,100,30),new nl.pixelretreat.logbook.core.CoverageSources(java.util.Set.of("EU","NA"),java.util.Map.of()));
             var today = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.DAYS);
             var result = reads.featureUsage(new nl.pixelretreat.logbook.api.FeatureUsageQuery(WorldVisits.VISITS.id(),1,
                 "world",today,today.plusSeconds(86400),Optional.empty(),0,100));
@@ -567,7 +567,7 @@ final class AtlasStatisticsMariaDbTest {
             assertTrue(result.entries().stream().allMatch(e -> e.users()==1));
             assertEquals(nl.pixelretreat.logbook.api.StatisticValue.Status.STALE,result.status());
             String php=System.getenv("LOGBOOK_TEST_PHP");assertNotNull(php,"Explicit private PHP test executable required");
-            Path script=Path.of(System.getProperty("pixelretreatWorkspace")).resolve("Logbook/website/tests/worlds.php");
+            Path script=Path.of(System.getProperty("logbookWebsiteTestSource")).resolve("tests/worlds.php");
             var process=new ProcessBuilder(php,script.toString(),"mysql:host=127.0.0.1;port="+fixturePort
                 +";dbname="+ownedSchema+";charset=utf8mb4").redirectErrorStream(true).start();
             boolean finished=process.waitFor(30,TimeUnit.SECONDS);if(!finished)process.destroyForcibly();
@@ -762,7 +762,7 @@ final class AtlasStatisticsMariaDbTest {
         try(var db=visitDatabase()) {
             var visits=new WorldVisits(db,ProducerLimits.APPROVED_START,"NA",256,error->{});visits.initialize();
             try(var c=db.getConnection()){nl.pixelretreat.logbook.core.ProjectionSchema.initialize(c);}
-            var script=Path.of(System.getProperty("pixelretreatWorkspace")).resolve("Logbook/website/tests/worlds.php");
+            var script=Path.of(System.getProperty("logbookWebsiteTestSource")).resolve("tests/worlds.php");
             var process=new ProcessBuilder(System.getenv("LOGBOOK_TEST_PHP"),script.toString(),
                 "mysql:host=127.0.0.1;port="+fixturePort+";dbname="+ownedSchema+";charset=utf8mb4","empty")
                 .redirectErrorStream(true).start();

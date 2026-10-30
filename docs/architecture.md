@@ -8,9 +8,9 @@ Closed access is stored separately from enabled state. Native original-player ad
 
 ## Server identity and storage
 
-Postbox publishes `PostboxBootstrapIdentity` during `onLoad` from the exact validated `server` configuration value `EU` or `NA`. This is a bootstrap configuration fact, not evidence that Postbox's database, presence or routing service is ready; those start in `onEnable`. Atlas has `load: POSTWORLD` and depends on Postbox. Its `onLoad` compares the bootstrap identity with Atlas's configured region before resolving world folders, opening Hikari, initializing schema, running queued world operations or synchronizing the datapack. Missing or mismatched identity fails Atlas closed. Atlas retains its later live `VeyraCluster` region check as a separate runtime readiness check.
+Postbox publishes `PostboxBootstrapIdentity` during `onLoad` from its validated `server.id`. This is a bootstrap configuration fact, not evidence that Postbox's database, presence or routing service is ready; those start in `onEnable`. Atlas has `load: POSTWORLD` and depends on Postbox. Its `onLoad` compares that exact ID with Atlas's `server.id` before resolving world folders, opening Hikari, initializing schema, running queued world operations or synchronizing the datapack. Missing or mismatched identity fails Atlas closed. Atlas separately waits for a fresh matching local lease from `PostboxNetwork`; native world operations remain local.
 
-MariaDB is the shared `pixelretreat_veyra` database; Atlas rows are partitioned by the validated local region. Each backend reads and mutates its own world, portal and keep-loaded records. Cross-region portal travel writes a one-use ticket for the target region; the destination consumes it conditionally. The current identity and peer contract accepts only the EU/NA pair and does not prove readiness for an additional node. See [multiserver support](multiserver.md).
+MariaDB is the shared `pixelretreat_veyra` database; Atlas rows are partitioned by the validated exact local server ID. Each backend reads and mutates its own world, portal and keep-loaded records. Cross-server portal travel writes a one-use ticket for the exact target server; the destination consumes it conditionally. Multiple configured servers may share a geographic region. Routing uses explicit server-to-proxy mappings. See [multiserver support](multiserver.md).
 
 ## Stored data
 
@@ -44,7 +44,9 @@ The origin validates the player and route, reserves a ticket in the original por
 
 ## Campfire and Closet
 
-Atlas registers its authored catalog with Campfire before delivering messages, and uses Campfire's public delivery API. The verified current route renders the authored Atlas strings in English even after a locale change; Atlas does not claim translated Atlas prose.
+Atlas registers its authored catalog with Campfire before delivering messages, and uses Campfire's public delivery API. Portal destination and bounds descriptions remain keyed references until compound delivery, sharing the enclosing message's recipient language and catalog snapshot. Console replies use the English catalog. World names, coordinates, command tokens and setting identifiers remain literal values.
+
+Atlas publishes a message-only refusal renderer through `WorldLifecycle.publishRefusalRenderer`. Native final join/respawn refusals render `world.closed-entry` for the original recipient UUID and refused world without requiring an online Bukkit player. Veyra bounds requests and retains the static refusal on failure, timeout or stale registration. Reload withdraws the registration and fences earlier callbacks before publishing the current renderer; disable withdraws it. Successful admission and teleport decisions do not wait for message rendering. This requires the matching native API/runtime release.
 
 Atlas registers `atlas:selector` and the selector lore glyph through Closet's public asset-registration contract. The definitions stay with Atlas. Closet owns and supplies every pack asset; Atlas does not own a texture, font, model or sound file.
 

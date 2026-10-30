@@ -2,7 +2,7 @@ package nl.pixelretreat.atlas;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import dev.veyra.api.VeyraCluster;
+import nl.pixelretreat.postbox.api.PostboxNetwork;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
@@ -36,6 +36,7 @@ import nl.pixelretreat.atlas.service.SelectionService;
 import nl.pixelretreat.atlas.service.StartupOperations;
 import nl.pixelretreat.atlas.service.TeleportService;
 import nl.pixelretreat.atlas.service.WorldAdminService;
+import nl.pixelretreat.atlas.world.WorldNames;
 import nl.pixelretreat.atlas.statistics.AtlasStatistics;
 import nl.pixelretreat.atlas.storage.AtlasRepository;
 import nl.pixelretreat.atlas.world.DatapackWriter;
@@ -79,6 +80,9 @@ public final class AtlasPlugin extends JavaPlugin {
     private volatile ClosetService closet;
     private volatile ContentRegistration closetRegistration;
     private volatile KeepLoadedService keepLoaded;
+    private volatile dev.veyra.api.WorldLifecycle.Registration refusalRenderer;
+    private volatile AtlasMessages liveMessages;
+    private long refusalGeneration;
     private volatile AtlasStatistics statistics;
     private volatile nl.pixelretreat.atlas.statistics.WorldVisits worldVisits;
     private final AtomicBoolean visitFlushQueued = new AtomicBoolean();
@@ -91,11 +95,11 @@ public final class AtlasPlugin extends JavaPlugin {
             AtlasConfig settings = AtlasConfig.read(YamlConfiguration.loadConfiguration(
                     getDataFolder().toPath().resolve("config.yml").toFile()));
             BootstrapIdentityGuard.requireMatch(
-                    getServer().getServicesManager().load(PostboxBootstrapIdentity.class), settings.region());
+                    getServer().getServicesManager().load(PostboxBootstrapIdentity.class), settings.serverId());
             config = settings;
             levelFolder = levelFolder();
             database = openDatabase(settings);
-            repository = new AtlasRepository(database, settings.region());
+            repository = new AtlasRepository(database, settings.serverId());
             repository.initialize();
             DatapackWriter writer = datapack(settings);
             startupOutcomes = new StartupOperations(repository, folders(settings), writer.declaredWorlds()).run();
@@ -192,13 +196,12 @@ public final class AtlasPlugin extends JavaPlugin {
      */
     private void connect(AtlasConfig settings, RulesService rules, int attempt) {
         if (stopped.get() || !isEnabled()) return;
-        VeyraCluster link = getServer().getServicesManager().load(VeyraCluster.class);
+        PostboxNetwork link = getServer().getServicesManager().load(PostboxNetwork.class);
         CampfireMessages messages = getServer().getServicesManager().load(CampfireMessages.class);
         ClosetService items = getServer().getServicesManager().load(ClosetService.class);
-        if (link != null && link.isEnabled() && link.localNode().isPresent()
-                && !link.localNode().get().name().equalsIgnoreCase(settings.region())) {
-            fail(new IllegalStateException("Postbox is " + link.localNode().get().name()
-                + " but Atlas expects " + settings.region()));
+        if (link != null && !link.topology().localServer().value().equals(settings.serverId())) {
+            fail(new IllegalStateException("Postbox is " + link.topology().localServer().value()
+                + " but Atlas expects " + settings.serverId()));
             return;
         }
         String late = lateContracts(link, messages, items);
@@ -214,7 +217,7 @@ public final class AtlasPlugin extends JavaPlugin {
         }
         campfire = messages;
         closet = items;
-        String backend = link.localNode().orElseThrow().name();
+        String backend = link.topology().localServer().value();
         messages.register(this).toCompletableFuture()
                 .thenCompose(registered -> {
                     AtlasMessages.validateCatalog(registered);
@@ -245,11 +248,10 @@ public final class AtlasPlugin extends JavaPlugin {
     }
 
     /** Names the contracts that have not been published yet, or null when all of them are ready. */
-    private static String lateContracts(VeyraCluster link, CampfireMessages messages, ClosetService items) {
+    private static String lateContracts(PostboxNetwork link, CampfireMessages messages, ClosetService items) {
         List<String> late = new ArrayList<>();
         if (link == null) late.add("Postbox cluster link");
-        else if (!link.isEnabled()) late.add("Postbox cluster link (not enabled)");
-        else if (link.localNode().isEmpty()) late.add("Postbox local node");
+        else if (!link.snapshot().members().containsKey(link.topology().localServer())) late.add("Postbox local lease");
         if (messages == null) late.add("Campfire messages");
         if (items == null) late.add("Closet service");
         return late.isEmpty() ? null : String.join(", ", late);
@@ -280,6 +282,7 @@ public final class AtlasPlugin extends JavaPlugin {
         }
         try {
             AtlasMessages messages = new AtlasMessages(this, Objects.requireNonNull(catalog), delivery);
+            liveMessages = messages;
             reportStartup(messages);
             SelectionService selections = new SelectionService();
             SelectorDeliveryService selectors = new SelectorDeliveryService(this, closet, deliveries, compass);
@@ -293,6 +296,7 @@ public final class AtlasPlugin extends JavaPlugin {
                     folders(settings), portals, regions);
             var access = new nl.pixelretreat.atlas.service.WorldAccessService(this, repository, rules,
                     teleports, dev.veyra.api.Veyra.worlds(), messages);
+            publishRefusalRenderer(refusalGeneration);
             access.publishStored();
             worlds.runtime(this, dev.veyra.api.Veyra.worlds(), access);
             getServer().getPluginManager().registerEvents(access, this);
@@ -344,11 +348,25 @@ public final class AtlasPlugin extends JavaPlugin {
     }
 
     private CompletableFuture<Void> reloadAll(RulesService rules, PortalService portals, KeepLoadedService regions) {
+        final long generation = withdrawRefusalRenderer();
         return campfire.reload(this, AtlasMessages::validateCatalog).toCompletableFuture()
                 .thenCompose(ignored -> authoredLocalization.reload(this).toCompletableFuture())
                 .thenCompose(ignored -> rules.reload())
                 .thenCompose(ignored -> CompletableFuture.allOf(portals.reload(), regions.reload()))
-                .thenRun(rules::applyAll);
+                .thenRun(rules::applyAll)
+                .whenComplete((done, failure) -> publishRefusalRenderer(generation));
+    }
+
+    private synchronized long withdrawRefusalRenderer() {
+        if (refusalRenderer != null) refusalRenderer.close();
+        refusalRenderer = null;
+        return ++refusalGeneration;
+    }
+
+    private synchronized void publishRefusalRenderer(long generation) {
+        if (stopped.get() || !isEnabled() || generation != refusalGeneration || refusalRenderer != null) return;
+        refusalRenderer = dev.veyra.api.Veyra.worlds().publishRefusalRenderer(this, (recipient, world) ->
+                liveMessages.render(recipient, "world.closed-entry", Map.of("world", WorldNames.shortName(world.toString()))));
     }
 
     private void reportStartup(AtlasMessages messages) {
@@ -384,6 +402,7 @@ public final class AtlasPlugin extends JavaPlugin {
     /** Releases tickets, workers and service registrations; never touches the server lifecycle. */
     @Override public void onDisable() {
         stopped.set(true);
+        withdrawRefusalRenderer();
         getServer().getServicesManager().unregisterAll(this);
         if (keepLoaded != null) keepLoaded.releaseAll();
         if (statistics != null) statistics.closeCapture();

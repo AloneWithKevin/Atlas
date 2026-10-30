@@ -6,14 +6,14 @@ import nl.pixelretreat.postbox.api.PostboxBootstrapIdentity;
 final class BootstrapIdentityGuard {
     private BootstrapIdentityGuard() {}
 
-    static void requireMatch(final PostboxBootstrapIdentity identity, final String atlasRegion) {
+    static void requireMatch(final PostboxBootstrapIdentity identity, final String atlasServer) {
         if (identity == null) {
             throw new IllegalStateException("Postbox bootstrap identity is unavailable");
         }
-        final String postboxRegion = identity.localNode().name();
-        if (!postboxRegion.equals(atlasRegion)) {
-            throw new IllegalStateException("Atlas region is " + atlasRegion
-                + " but Postbox bootstrap identity is " + postboxRegion);
+        final String postboxServer = identity.localServer().value();
+        if (!postboxServer.equals(atlasServer)) {
+            throw new IllegalStateException("Atlas server is " + atlasServer
+                + " but Postbox bootstrap identity is " + postboxServer);
         }
     }
 }
