@@ -1,4 +1,4 @@
-> **Historical implementation note (8 October 2026).** The authored Atlas catalog is registered with Campfire before message-dependent behavior starts. The current audit verifies the real delivery route: authored Atlas strings render in English after a viewer locale change. See [presentation audit](presentation-audit.md) and the external [Atlas final report](../../Ferry/Eindrapporten/Atlas.md) for current source and test status.
+> **Historical implementation note (8 October 2026).** The authored Atlas catalog was registered with Campfire before message-dependent behavior started. The audit at that time observed English rendering after a viewer locale change. Current recipient-language delivery and the native refusal-renderer requirement are described in [architecture](architecture.md) and [presentation audit](presentation-audit.md). The implementation history below retains its original scope.
 
 # Authored catalog registration
 

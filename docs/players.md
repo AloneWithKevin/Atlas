@@ -1,6 +1,6 @@
 # Worlds and portals
 
-Atlas manages travel and the rules that apply in each world. You do not need to open an Atlas menu or run an Atlas command to use a portal: walk into it. Atlas messages are shown in English.
+Atlas manages travel and the rules that apply in each world. You do not need to open an Atlas menu or run an Atlas command to use a portal: walk into it. Atlas messages use your Campfire language, including portal destination descriptions. World names, coordinates and command arguments keep their original values. If translation is unavailable, the English message remains available.
 
 ## Travelling
 

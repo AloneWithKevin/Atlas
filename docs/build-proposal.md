@@ -24,7 +24,7 @@ Atlas defines one Closet item, `atlas:selector`, for staff selection. Closet is 
 - Handshake checks the per-world `trading` flag, default on.
 - Jar plugin-origin spawns use the `plugin-*` flags; Nest vanilla spawner-origin mobs use the normal game flags.
 - Atlas publishes seven approved measurement groups through the public Logbook contract. Its matching Logbook provider is built/tested locally; the dependent release remains undeployed until provider deployment is authorized.
-- Campfire registers the authored Atlas catalog and delivers its messages. The tested route renders authored strings in English regardless of viewer locale; no translated Atlas prose is claimed.
+- Campfire registers the authored Atlas catalog and delivers recipient-language messages, including compound portal descriptions. Console messages and literal command/world values retain their original values. Native final closed-world refusals require the matching Veyra refusal-renderer API/runtime.
 
 ## Supported server boundary
 
