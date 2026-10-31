@@ -61,6 +61,8 @@ import org.bukkit.plugin.java.JavaPlugin;
  * loading" and guarded gameplay is refused until the rules are loaded.
  */
 public final class AtlasPlugin extends JavaPlugin {
+    private nl.pixelretreat.controller.api.InventoryTransferApi.PreparationRegistration transferPreparation;
+    private PortalService transferPortals;
     private final AtomicBoolean stopped = new AtomicBoolean();
     private final AtomicBoolean failed = new AtomicBoolean();
     private volatile AtlasConfig config;
@@ -262,7 +264,9 @@ public final class AtlasPlugin extends JavaPlugin {
         CampfireDelivery delivery = getServer().getServicesManager().load(CampfireDelivery.class);
         ClosetLiveItems deliveries = getServer().getServicesManager().load(ClosetLiveItems.class);
         CompassApi compass = getServer().getServicesManager().load(CompassApi.class);
-        if (delivery == null || deliveries == null || !deliveries.supportsTracedOverflow() || compass == null) {
+        var transfers=getServer().getServicesManager().load(nl.pixelretreat.controller.api.InventoryTransferApi.class);
+        var bindings=getServer().getServicesManager().load(nl.pixelretreat.controller.api.BoundConnectionsApi.class);
+        if (delivery == null || deliveries == null || !deliveries.supportsTracedOverflow() || compass == null || transfers==null || bindings==null) {
             if (attempt >= CONTRACT_ATTEMPTS) { fail(new IllegalStateException("Campfire delivery, Closet live items or Compass unavailable")); return; }
             getServer().getGlobalRegionScheduler().runDelayed(this, task -> install(settings, rules, attempt + 1), CONTRACT_INTERVAL_TICKS);
             return;
@@ -288,7 +292,13 @@ public final class AtlasPlugin extends JavaPlugin {
             SelectorDeliveryService selectors = new SelectorDeliveryService(this, closet, deliveries, compass);
             TeleportService teleports = new TeleportService(this, rules, settings);
             PortalService portals = new PortalService(this, repository, workers, settings, teleports, messages);
-            portals.statistics(statistics);
+            portals.statistics(statistics);portals.transfers(transfers,bindings,dev.veyra.api.Veyra.playerCheckpoints());transferPortals=portals;
+            transferPreparation=transfers.registerPreparation(this,new nl.pixelretreat.controller.api.InventoryTransferApi.TransferPreparation(){
+                @Override public java.util.concurrent.CompletionStage<nl.pixelretreat.controller.api.InventoryTransferApi.Preparation> beforeDestinationExposure(nl.pixelretreat.controller.api.TransferPlan plan,Player original){
+                    return plan.owner().equals("atlas")?portals.prepareArrival(plan,original):CompletableFuture.completedStage(nl.pixelretreat.controller.api.InventoryTransferApi.Preparation.READY);
+                }
+                @Override public void transferFinished(nl.pixelretreat.controller.api.TransferPlan plan,nl.pixelretreat.controller.api.InventoryTransferApi.Phase terminal){portals.transferFinished(plan);}
+            });
             KeepLoadedService regions = new KeepLoadedService(this, repository, workers);
             regions.statistics(statistics);
             keepLoaded = regions;
@@ -402,6 +412,8 @@ public final class AtlasPlugin extends JavaPlugin {
     /** Releases tickets, workers and service registrations; never touches the server lifecycle. */
     @Override public void onDisable() {
         stopped.set(true);
+        if(transferPreparation!=null)transferPreparation.close();
+        if(transferPortals!=null)transferPortals.close();
         withdrawRefusalRenderer();
         getServer().getServicesManager().unregisterAll(this);
         if (keepLoaded != null) keepLoaded.releaseAll();

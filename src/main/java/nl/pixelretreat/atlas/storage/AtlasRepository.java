@@ -23,6 +23,7 @@ import nl.pixelretreat.atlas.keeploaded.KeepLoadedRegion;
 import nl.pixelretreat.atlas.portal.Portal;
 import nl.pixelretreat.atlas.portal.PortalTarget;
 import nl.pixelretreat.atlas.portal.TravelTicket;
+import nl.pixelretreat.controller.api.TransferPlan;
 import nl.pixelretreat.atlas.world.PendingOperation;
 import nl.pixelretreat.atlas.world.SpawnPoint;
 import nl.pixelretreat.atlas.world.WeatherMode;
@@ -153,6 +154,7 @@ public final class AtlasRepository {
                 ServerIdentityColumns.widen(connection,table,"server");
             ServerIdentityColumns.widen(connection,"atlas_portal","target_region");
             ServerIdentityColumns.widen(connection,"atlas_travel_ticket","origin_region","target_region");
+            statement.execute("ALTER TABLE atlas_travel_ticket ADD COLUMN IF NOT EXISTS transfer_fingerprint CHAR(64) NULL,ADD COLUMN IF NOT EXISTS arrival_state VARCHAR(16) NULL,ADD COLUMN IF NOT EXISTS transfer_terminal BOOLEAN NOT NULL DEFAULT FALSE");
         }
     }
 
@@ -1009,14 +1011,22 @@ public final class AtlasRepository {
 
     /** Records the ticket and its original Logbook root in the same source transaction. */
     public void issueTicket(TravelTicket ticket, String targetRegion, Instant expiresAt, String sourceWorld) throws SQLException {
+        issueTicket(ticket,targetRegion,expiresAt,sourceWorld,null);
+    }
+    public void issueTransferTicket(TravelTicket ticket,TransferPlan plan,Instant expiresAt,String sourceWorld)throws SQLException {
+        if(!plan.id().equals(ticket.id())||!plan.player().equals(ticket.player())||!plan.owner().equals("atlas")||!plan.sourceNode().equals(server))
+            throw new IllegalArgumentException("Original portal transfer required");
+        issueTicket(ticket,plan.targetNode(),expiresAt,sourceWorld,transferFingerprint(plan));
+    }
+    private void issueTicket(TravelTicket ticket,String targetRegion,Instant expiresAt,String sourceWorld,String fingerprint)throws SQLException {
         try (Connection connection = database.getConnection()) {
             connection.setAutoCommit(false);
             try {
                 lockStatistics(connection);
                 try (PreparedStatement insert = connection.prepareStatement("""
                         INSERT INTO atlas_travel_ticket (id, player, origin_region, target_region, portal, target_world,
-                          target_x, target_y, target_z, target_yaw, target_pitch, expires_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""")) {
+                          target_x, target_y, target_z, target_yaw, target_pitch, expires_at,transfer_fingerprint,arrival_state)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)""")) {
                     insert.setString(1, ticket.id().toString());
                     insert.setString(2, ticket.player().toString());
                     insert.setString(3, server);
@@ -1025,6 +1035,7 @@ public final class AtlasRepository {
                     insert.setString(6, ticket.world());
                     setPoint(insert, 7, ticket.point());
                     insert.setTimestamp(12, Timestamp.from(expiresAt));
+                    insert.setString(13,fingerprint);insert.setString(14,fingerprint==null?null:"WAITING");
                     insert.executeUpdate();
                 }
                 AtlasStatistics current = statistics;
@@ -1138,7 +1149,7 @@ public final class AtlasRepository {
                 TravelTicket ticket;
                 Timestamp selectedCreatedAt;
                 try (PreparedStatement query = connection.prepareStatement("""
-                        SELECT * FROM atlas_travel_ticket WHERE player = ? AND target_region = ? AND consumed_at IS NULL
+                        SELECT * FROM atlas_travel_ticket WHERE player = ? AND target_region = ? AND consumed_at IS NULL AND transfer_fingerprint IS NULL
                           AND expires_at > CURRENT_TIMESTAMP(3) ORDER BY created_at DESC LIMIT 1""")) {
                     query.setString(1, player.toString());
                     query.setString(2, server);
@@ -1161,7 +1172,7 @@ public final class AtlasRepository {
                 if (current != null) current.portalTicketConsumed(connection, ticket.id(), ticket.player());
                 try (PreparedStatement expireSuperseded = connection.prepareStatement("""
                         UPDATE atlas_travel_ticket SET expires_at = CURRENT_TIMESTAMP(3)
-                        WHERE player = ? AND target_region = ? AND consumed_at IS NULL AND id <> ?
+                        WHERE player = ? AND target_region = ? AND consumed_at IS NULL AND transfer_fingerprint IS NULL AND id <> ?
                           AND created_at <= ?
                         """)) {
                     expireSuperseded.setString(1, ticket.player().toString());
@@ -1179,10 +1190,62 @@ public final class AtlasRepository {
         }
     }
 
+    public record TransferArrival(TravelTicket ticket,String phase,boolean claimed) { }
+    public Optional<TransferArrival> claimTransferArrival(TransferPlan plan)throws SQLException {
+        if(!plan.owner().equals("atlas")||!plan.targetNode().equals(server))throw new IllegalArgumentException("Original local portal arrival required");
+        try(var connection=database.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                var current=statistics;if(current!=null)current.lockPlayerPortalSource(connection,plan.player());
+                TravelTicket ticket;String phase;boolean expired;
+                try(var query=connection.prepareStatement("SELECT *,expires_at<=CURRENT_TIMESTAMP(3) AS expired FROM atlas_travel_ticket WHERE id=? AND player=? AND target_region=? AND transfer_fingerprint=? AND transfer_terminal=FALSE FOR UPDATE")) {
+                    query.setString(1,plan.id().toString());query.setString(2,plan.player().toString());query.setString(3,server);query.setString(4,transferFingerprint(plan));
+                    try(var row=query.executeQuery()) {
+                        if(!row.next()){connection.rollback();return Optional.empty();}
+                        phase=row.getString("arrival_state");expired=row.getBoolean("expired");
+                        var point=row.getObject("target_x")==null?Optional.<SpawnPoint>empty():Optional.of(new SpawnPoint(row.getDouble("target_x"),row.getDouble("target_y"),row.getDouble("target_z"),row.getFloat("target_yaw"),row.getFloat("target_pitch")));
+                        ticket=new TravelTicket(plan.id(),plan.player(),row.getString("portal"),row.getString("target_world"),point);
+                    }
+                }
+                boolean claimed=false;
+                if("WAITING".equals(phase)&&expired) {
+                    try(var update=connection.prepareStatement("UPDATE atlas_travel_ticket SET arrival_state='NOT_MOVED',consumed_at=CURRENT_TIMESTAMP(3) WHERE id=? AND arrival_state='WAITING'")) {
+                        update.setString(1,plan.id().toString());update.executeUpdate();phase="NOT_MOVED";
+                    }
+                    if(current!=null){current.portalTicketConsumed(connection,plan.id(),plan.player());current.finishPortalTrip(connection,plan.id(),"not_performed");}
+                }
+                if("WAITING".equals(phase))try(var update=connection.prepareStatement("UPDATE atlas_travel_ticket SET arrival_state='ARRIVING',consumed_at=CURRENT_TIMESTAMP(3) WHERE id=? AND arrival_state='WAITING'")) {
+                    update.setString(1,plan.id().toString());claimed=update.executeUpdate()==1;phase="ARRIVING";
+                    if(claimed&&current!=null)current.portalTicketConsumed(connection,plan.id(),plan.player());
+                }
+                connection.commit();return Optional.of(new TransferArrival(ticket,phase,claimed));
+            }catch(SQLException|RuntimeException failure){connection.rollback();throw failure;}
+        }
+    }
+    public boolean finishTransferArrival(TransferPlan plan,boolean moved)throws SQLException {
+        try(var connection=database.getConnection();var update=connection.prepareStatement("UPDATE atlas_travel_ticket SET arrival_state=? WHERE id=? AND player=? AND target_region=? AND transfer_fingerprint=? AND arrival_state='ARRIVING'")) {
+            update.setString(1,moved?"ARRIVED":"NOT_MOVED");update.setString(2,plan.id().toString());update.setString(3,plan.player().toString());update.setString(4,server);update.setString(5,transferFingerprint(plan));return update.executeUpdate()==1;
+        }
+    }
+    public void transferTerminal(TransferPlan plan)throws SQLException {
+        try(var connection=database.getConnection();var update=connection.prepareStatement("UPDATE atlas_travel_ticket SET transfer_terminal=TRUE WHERE id=? AND player=? AND transfer_fingerprint=?")) {
+            update.setString(1,plan.id().toString());update.setString(2,plan.player().toString());update.setString(3,transferFingerprint(plan));update.executeUpdate();
+        }
+    }
+    private static String transferFingerprint(TransferPlan plan) {
+        try {
+            var bytes=new java.io.ByteArrayOutputStream();
+            try(var out=new java.io.DataOutputStream(bytes)) {
+                for(var value:List.of(plan.id().toString(),plan.owner(),plan.player().toString(),plan.session().proxyEpoch().toString(),plan.session().connectionId().toString(),plan.sourceNode(),plan.sourceBackend(),plan.sourceVisit().toString(),plan.targetNode(),plan.targetBackend()))out.writeUTF(value);
+            }
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes.toByteArray()));
+        }catch(java.io.IOException|java.security.NoSuchAlgorithmException impossible){throw new IllegalStateException(impossible);}
+    }
+
     /** Removes expired and consumed tickets older than a day. */
     public int purgeTickets() throws SQLException {
         try (Connection connection = database.getConnection(); PreparedStatement delete = connection.prepareStatement(
-                "DELETE FROM atlas_travel_ticket WHERE origin_region = ? AND expires_at < CURRENT_TIMESTAMP(3) - INTERVAL 1 DAY")) {
+                "DELETE FROM atlas_travel_ticket WHERE origin_region = ? AND (transfer_fingerprint IS NULL OR transfer_terminal=TRUE) AND expires_at < CURRENT_TIMESTAMP(3) - INTERVAL 1 DAY")) {
             delete.setString(1, server);
             return delete.executeUpdate();
         }

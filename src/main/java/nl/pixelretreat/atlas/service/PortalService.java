@@ -1,7 +1,5 @@
 package nl.pixelretreat.atlas.service;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -20,6 +18,7 @@ import nl.pixelretreat.atlas.portal.Portal;
 import nl.pixelretreat.atlas.portal.PortalIndex;
 import nl.pixelretreat.atlas.portal.PortalTarget;
 import nl.pixelretreat.atlas.portal.TravelTicket;
+import nl.pixelretreat.controller.api.*;
 import nl.pixelretreat.atlas.storage.AtlasRepository;
 import nl.pixelretreat.atlas.statistics.AtlasStatistics;
 import nl.pixelretreat.atlas.message.AtlasMessages;
@@ -55,6 +54,16 @@ public final class PortalService {
     private final AtomicBoolean invalidTargetWarned = new AtomicBoolean();
     private final Object mutationLock = new Object();
     private volatile AtlasStatistics statistics;
+    private InventoryTransferApi transfers;
+    private BoundConnectionsApi bindings;
+    private dev.veyra.api.PlayerCheckpoints checkpoints;
+    private volatile boolean closed;
+    private record Preparing(Player original,CompletableFuture<InventoryTransferApi.Preparation> result) { }
+    private final Map<UUID,Preparing> preparing=new ConcurrentHashMap<>();
+    public void transfers(InventoryTransferApi transfers,BoundConnectionsApi bindings,dev.veyra.api.PlayerCheckpoints checkpoints){this.transfers=java.util.Objects.requireNonNull(transfers);this.bindings=java.util.Objects.requireNonNull(bindings);this.checkpoints=java.util.Objects.requireNonNull(checkpoints);}
+    public void close(){closed=true;preparing.values().forEach(p->p.result().complete(InventoryTransferApi.Preparation.UNKNOWN));preparing.clear();}
+    public void transferFinished(TransferPlan plan){if(plan.owner().equals("atlas"))workers.submit(()->{repository.transferTerminal(plan);return null;});}
+
 
     public PortalService(Plugin plugin, AtlasRepository repository, AtlasWorkers workers, AtlasConfig config,
                          TeleportService teleports, AtlasMessages messages) {
@@ -192,6 +201,7 @@ public final class PortalService {
 
     /** Forgets a player's cooldown when they leave. */
     public void forget(UUID player) { cooldowns.remove(player); }
+    public void forget(Player original) {cooldowns.remove(original.getUniqueId());preparing.values().forEach(p->{if(p.original()==original)p.result().complete(InventoryTransferApi.Preparation.UNKNOWN);});}
 
     /** Sends a player through a portal. Player thread. */
     public CompletableFuture<Travel> travel(Player player, Portal portal) {
@@ -246,35 +256,77 @@ public final class PortalService {
                 portal.target().world(), portal.target().point());
         Instant expires = Instant.now().plusSeconds(config.travelTicketMinutes() * 60L);
         CompletableFuture<Travel> result = new CompletableFuture<>();
-        workers.submit(() -> { repository.issueTicket(ticket, region, expires, sourceWorld); return null; }).whenComplete((done, failure) -> {
-            if (failure != null) {
-                recordAttempt(ticket.player(), portal.name(), "refused", "statistics_admission");
-                result.complete(Travel.FAILED);
-                return;
-            }
-            recordAttempt(ticket.player(), portal.name(), "accepted", "none");
-            boolean scheduled = player.getScheduler().run(plugin, task -> {
-                if (!player.isOnline() || !authorized(player, portal)) {
-                    withdraw(ticket, true);
-                    result.complete(Travel.FAILED);
-                    return;
+        if(transfers==null||bindings==null||closed||!transfers.routingReady())return CompletableFuture.completedFuture(Travel.FAILED);
+        bindings.capture(player).thenCompose(bound->{
+            var proof=bound.orElseThrow(()->new IllegalStateException("Original portal source unavailable")).connection();
+            var source=proof.backend().orElseThrow();
+            if(!source.serverName().equals(config.proxyNames().get(config.serverId())))throw new IllegalStateException("Portal source mapping changed");
+            var plan=new TransferPlan(ticket.id(),"atlas",ticket.player(),proof.session().orElseThrow(),config.serverId(),source.serverName(),source.visitId(),region,proxyName);
+            return workers.submit(()->{repository.issueTransferTicket(ticket,plan,expires,sourceWorld);return plan;});
+        }).whenComplete((plan,failure)->{
+            if(failure!=null){result.complete(Travel.FAILED);return;}
+            boolean scheduled=player.getScheduler().run(plugin,task->{
+                if(closed||!plugin.isEnabled()||!player.isOnline()||plugin.getServer().getPlayer(ticket.player())!=player||!authorized(player,portal)) {
+                    withdraw(ticket,true);result.complete(Travel.FAILED);return;
                 }
                 try {
-                    effects(player, portal);
-                    try (var bytes = new ByteArrayOutputStream(); var output = new DataOutputStream(bytes)) {
-                        output.writeUTF("Connect");
-                        output.writeUTF(proxyName);
-                        player.sendPluginMessage(plugin, "BungeeCord", bytes.toByteArray());
-                    }
-                    result.complete(Travel.SWITCHING);
-                } catch (IOException | RuntimeException error) {
-                    withdraw(ticket, false);
-                    result.complete(Travel.FAILED);
-                }
-            }, () -> { withdraw(ticket, true); result.complete(Travel.FAILED); }) != null;
-            if (!scheduled) { withdraw(ticket, true); result.complete(Travel.FAILED); }
+                    effects(player,portal);
+                    transfers.transfer(plugin,plan,player).whenComplete((receipt,transferFailure)->{
+                        if(transferFailure!=null||receipt==null){withdraw(ticket,false);result.complete(Travel.FAILED);return;}
+                        if(receipt.phase()==InventoryTransferApi.Phase.REFUSED){withdraw(ticket,true);result.complete(Travel.FAILED);return;}
+                        recordAttempt(ticket.player(),portal.name(),"accepted","none");result.complete(Travel.SWITCHING);
+                    });
+                }catch(RuntimeException unknown){withdraw(ticket,false);result.complete(Travel.FAILED);}
+            },()->{withdraw(ticket,true);result.complete(Travel.FAILED);})!=null;
+            if(!scheduled){withdraw(ticket,true);result.complete(Travel.FAILED);}
         });
         return result;
+    }
+
+    /** Prepares the original portal destination while native first chunks are still gated. */
+    public java.util.concurrent.CompletionStage<InventoryTransferApi.Preparation> prepareArrival(TransferPlan plan,Player original) {
+        if(closed||bindings==null||!plan.owner().equals("atlas"))return CompletableFuture.completedStage(InventoryTransferApi.Preparation.UNKNOWN);
+        var known=preparing.get(plan.id());if(known!=null)return known.original()==original?known.result():CompletableFuture.completedStage(InventoryTransferApi.Preparation.UNKNOWN);
+        if(preparing.size()>=128)return CompletableFuture.completedStage(InventoryTransferApi.Preparation.WAITING);
+        var pending=new Preparing(original,new CompletableFuture<>());known=preparing.putIfAbsent(plan.id(),pending);
+        if(known!=null)return known.original()==original?known.result():CompletableFuture.completedStage(InventoryTransferApi.Preparation.UNKNOWN);
+        pending.result().whenComplete((v,f)->preparing.remove(plan.id(),pending));
+        bindings.capture(original).thenCompose(bound->{
+            if(bound.isEmpty()||!bound.get().connection().session().filter(plan.session()::equals).isPresent()
+                ||!bound.get().connection().backend().filter(b->b.serverName().equals(plan.targetBackend())).isPresent())
+                return CompletableFuture.<Optional<AtlasRepository.TransferArrival>>completedStage(Optional.empty());
+            return workers.submit(()->repository.claimTransferArrival(plan));
+        }).whenComplete((arrival,failure)->{
+            if(failure!=null||arrival.isEmpty()){pending.result().complete(InventoryTransferApi.Preparation.UNKNOWN);return;}
+            var claimed=arrival.get();
+            if(java.util.Set.of("ARRIVED","NOT_MOVED").contains(claimed.phase())){pending.result().complete(InventoryTransferApi.Preparation.READY);return;}
+            if(!claimed.claimed()){pending.result().complete(InventoryTransferApi.Preparation.UNKNOWN);return;}
+            if(original.getScheduler().run(plugin,task->{
+                if(closed||!plugin.isEnabled()||!original.isOnline()||plugin.getServer().getPlayer(plan.player())!=original){pending.result().complete(InventoryTransferApi.Preparation.UNKNOWN);return;}
+                var ticket=claimed.ticket();var world=plugin.getServer().getWorld(NamespacedKey.fromString(ticket.world()));
+                if(world==null||!(original.isOp()||original.hasPermission("atlas.portal.use"))){preparedOutcome(plan,pending,false);return;}
+                teleports.teleportDetailed(original,world,ticket.point(),()->!closed&&original.isOnline()&&plugin.getServer().getPlayer(plan.player())==original
+                    &&(original.isOp()||original.hasPermission("atlas.portal.use"))).whenComplete((outcome,teleportFailure)->{
+                    if(teleportFailure!=null||outcome==null||outcome==TeleportService.Outcome.UNKNOWN){pending.result().complete(InventoryTransferApi.Preparation.UNKNOWN);return;}
+                    if(outcome==TeleportService.Outcome.NOT_PERFORMED){preparedOutcome(plan,pending,false);return;}
+                    try {
+                        checkpoints.checkpoint(original).whenComplete((saved,saveFailure)->{
+                            if(saveFailure!=null||saved==null||saved.status()!=dev.veyra.api.CheckpointResult.Status.SAVED){pending.result().complete(InventoryTransferApi.Preparation.UNKNOWN);return;}
+                            index().named(ticket.portal()).ifPresent(portal->effects(original,portal));
+                            preparedOutcome(plan,pending,true);
+                        });
+                    }catch(RuntimeException unavailable){pending.result().complete(InventoryTransferApi.Preparation.UNKNOWN);}
+                });
+            },()->pending.result().complete(InventoryTransferApi.Preparation.UNKNOWN))==null)pending.result().complete(InventoryTransferApi.Preparation.UNKNOWN);
+        });
+        return pending.result();
+    }
+    private void preparedOutcome(TransferPlan plan,Preparing pending,boolean moved) {
+        if(!moved)messages.send(pending.original(),"portal.arrival-failed");
+        workers.submit(()->{
+            if(!repository.finishTransferArrival(plan,moved))return false;
+            repository.finishPortalTrip(plan.id(),moved?"arrived":"not_performed");return true;
+        }).whenComplete((saved,failure)->pending.result().complete(failure==null&&Boolean.TRUE.equals(saved)?InventoryTransferApi.Preparation.READY:InventoryTransferApi.Preparation.UNKNOWN));
     }
 
     private void withdraw(TravelTicket ticket, boolean provenNotSent) {
@@ -289,42 +341,9 @@ public final class PortalService {
                 && (!portal.restricted() || player.hasPermission(portal.permission()));
     }
 
-    /**
-     * Consumes a travel ticket for a player who just joined and teleports them to its target.
-     * Completes empty when there was no ticket.
-     */
+    /** Legacy unbound tickets are retained as evidence; only Controller preparation may relocate a join. */
     public CompletableFuture<Optional<Travel>> arrive(Player player) {
-        CompletableFuture<Optional<Travel>> result = new CompletableFuture<>();
-        UUID playerId = player.getUniqueId();
-        workers.submit(() -> repository.takeTicket(playerId)).whenComplete((ticket, failure) -> {
-            if (failure != null) { result.completeExceptionally(failure); return; }
-            if (ticket.isEmpty()) { result.complete(Optional.empty()); return; }
-            TravelTicket issued = ticket.get();
-            boolean scheduled = player.getScheduler().run(plugin, task -> {
-                if (!player.isOnline()) {
-                    finishArrival(issued.id(), "not_performed", Travel.FAILED, result);
-                    return;
-                }
-                World world = plugin.getServer().getWorld(NamespacedKey.fromString(issued.world()));
-                if (world == null) {
-                    finishArrival(issued.id(), "target_missing", Travel.TARGET_MISSING, result);
-                    return;
-                }
-                teleports.teleportDetailed(player, world, issued.point()).whenComplete((outcome, teleportFailure) -> {
-                    if (teleportFailure != null || outcome == TeleportService.Outcome.UNKNOWN) {
-                        unresolved(issued.id(), "arrival_teleport_unknown");
-                        result.complete(Optional.of(Travel.FAILED));
-                    } else if (outcome == TeleportService.Outcome.ARRIVED) {
-                        index().named(issued.portal()).ifPresent(portal -> effects(player, portal));
-                        finishArrival(issued.id(), "arrived", Travel.ARRIVED, result);
-                    } else finishArrival(issued.id(), "not_performed", Travel.FAILED, result);
-                });
-            }, () -> finishArrival(issued.id(), "not_performed", Travel.FAILED, result)) != null;
-            if (!scheduled) {
-                finishArrival(issued.id(), "not_performed", Travel.FAILED, result);
-            }
-        });
-        return result;
+        return CompletableFuture.completedFuture(Optional.empty());
     }
 
     private void finish(UUID operation, String outcome, Travel resultValue, CompletableFuture<Travel> result) {
@@ -337,20 +356,6 @@ public final class PortalService {
                                 "portal_trip", null);
                     }
                     result.complete(resultValue);
-                });
-    }
-
-    private void finishArrival(UUID operation, String outcome, Travel resultValue,
-                               CompletableFuture<Optional<Travel>> result) {
-        if (statistics != null && !statistics.retainsPortal(operation)) { result.complete(Optional.of(resultValue)); return; }
-        workers.submit(() -> { repository.finishPortalTrip(operation, outcome); return null; })
-                .whenComplete((ignored, failure) -> {
-                    if (failure != null) {
-                        AtlasStatistics current = statistics;
-                        if (current != null) current.observeGap("portal_terminal_write_failed", "atlas_logbook_portal_trips",
-                                "portal_trip", null);
-                    }
-                    result.complete(Optional.of(resultValue));
                 });
     }
 

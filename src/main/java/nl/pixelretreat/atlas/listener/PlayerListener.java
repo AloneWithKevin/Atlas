@@ -78,6 +78,6 @@ public final class PlayerListener implements Listener {
     public void onQuit(PlayerQuitEvent event) {
         if (statistics != null) statistics.endVisit(event.getPlayer().getUniqueId(), "quit");
         selections.clear(event.getPlayer().getUniqueId());
-        portals.forget(event.getPlayer().getUniqueId());
+        portals.forget(event.getPlayer());
     }
 }
