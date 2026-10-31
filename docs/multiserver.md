@@ -21,19 +21,24 @@ Owned identity columns widen conditionally to64 ASCII/binary characters, retaini
 all historical EU/NA bytes. Unexpected old values stop migration for review. Startup does not
 rename EU/NA records to new installation names, import worlds or reset data.
 
-One-use travel tickets retain their original UUID, player, source/target server, timestamps and world.
-The destination accepts only its exact target and conditionally consumes the ticket once. Consuming
-a newer ticket expires older/equal same-player/same-target tickets without inventing an outcome for
-their original operations. Tickets for other target servers remain independent.
+New portal tickets keep their original UUID as the Controller transfer ID. Their fingerprint
+binds the exact player, proxy session, source visit and registered source/target endpoints.
+Required destination preparation claims that same ticket once, before native first-chunk
+exposure. An actual successful teleport also needs its original player's SAVED checkpoint
+before the ticket becomes ARRIVED. A known non-movement becomes NOT_MOVED; an interrupted
+ARRIVING remains unknown and is never dispatched again.
 
 ## Proxy travel and uncertainty
 
-Portal travel keeps the existing Velocity BungeeCord Connect mechanism. The configured destination
-receives the request after ticket creation; the proxy message has no Atlas ticket/session correlation
-or completion acknowledgement. Queueing/sending is therefore not proof of arrival. An exception
-after invocation retains the original ticket and unknown-send gap, without a fresh automatic retry.
-Only proven pre-send cancellation withdraws an unused ticket. A later unrelated arrival may still
-consume an original unexpired ticket; causal proxy correlation is not claimed.
+Portals use Controller's public exact-plan transfer API. Source binding and ticket intent are
+persisted before transfer admission; no uncorrelated Bungee Connect is sent. Controller owns
+full inventory custody, routing and exposure. A changed binding or unknown provider result
+cannot create a replacement ticket or transfer ID.
+
+Legacy unbound tickets remain evidence and are not automatically consumed or dispatched by
+join. They therefore cannot race a new prepared arrival. Only matching terminal transfer
+proof makes a new ticket eligible for the existing age-based purge. Unfinished modern tickets
+are retained, including after a restart or expiry during an uncertain movement.
 
 Permission and entity-owner rechecks, original operation/custody evidence, bounded workers and
 local native world ownership remain in force. Separate servers have independent worlds; this does

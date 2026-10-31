@@ -51,6 +51,24 @@ final class AtlasRepositoryMariaDbTest {
         }
     }
 
+    @Test void controllerArrivalRetainsExactRootAndNeverReplaysAnInterruptedTeleport()throws Exception {
+        String url=System.getenv("ATLAS_TEST_JDBC_URL");assumeTrue(url!=null&&!url.isBlank());
+        var config=new HikariConfig();config.setJdbcUrl(url);config.setUsername("root");config.setMaximumPoolSize(3);
+        try(var pool=new HikariDataSource(config)) {
+            var source=new AtlasRepository(pool,"Hub01");var target=new AtlasRepository(pool,"Survival01");source.initialize();target.initialize();
+            var ticket=new TravelTicket(UUID.randomUUID(),UUID.randomUUID(),"original", "atlas:original",Optional.of(new SpawnPoint(10,70,20,0,0)));
+            var plan=new nl.pixelretreat.controller.api.TransferPlan(ticket.id(),"atlas",ticket.player(),new nl.pixelretreat.controller.api.PlayerConnection.Session(UUID.randomUUID(),UUID.randomUUID()),"Hub01","FixtureHub",UUID.randomUUID(),"Survival01","FixtureSurvival");
+            source.issueTransferTicket(ticket,plan,Instant.now().plusSeconds(60),"minecraft:overworld");
+            assertTrue(target.takeTicket(ticket.player()).isEmpty(),"legacy join cannot consume a prepared Controller ticket");
+            var claimed=target.claimTransferArrival(plan).orElseThrow();assertTrue(claimed.claimed());assertEquals(ticket,claimed.ticket());
+            var restarted=new AtlasRepository(pool,"Survival01");var unknown=restarted.claimTransferArrival(plan).orElseThrow();
+            assertFalse(unknown.claimed());assertEquals("ARRIVING",unknown.phase());
+            var changed=new nl.pixelretreat.controller.api.TransferPlan(plan.id(),plan.owner(),plan.player(),new nl.pixelretreat.controller.api.PlayerConnection.Session(UUID.randomUUID(),UUID.randomUUID()),plan.sourceNode(),plan.sourceBackend(),plan.sourceVisit(),plan.targetNode(),plan.targetBackend());
+            assertTrue(restarted.claimTransferArrival(changed).isEmpty());assertFalse(restarted.finishTransferArrival(changed,true));
+            assertTrue(restarted.finishTransferArrival(plan,true));assertEquals("ARRIVED",restarted.claimTransferArrival(plan).orElseThrow().phase());assertFalse(restarted.finishTransferArrival(plan,false));
+            source.transferTerminal(plan);assertTrue(restarted.claimTransferArrival(plan).isEmpty());
+        }
+    }
     @Test void wideningPreservesHistoricalIdentityBytesAndAcceptsExactMaximumLength()throws Exception {
         String url=System.getenv("ATLAS_TEST_JDBC_URL");assumeTrue(url!=null&&!url.isBlank());
         var config=new HikariConfig();config.setJdbcUrl(url);config.setUsername("root");config.setMaximumPoolSize(2);
