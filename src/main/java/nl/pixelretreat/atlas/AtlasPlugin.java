@@ -336,6 +336,7 @@ public final class AtlasPlugin extends JavaPlugin {
                             players.arrived(online);
                         }, null);
                     }
+                    nl.pixelretreat.postbox.api.StartupReadiness.publish(this,()->!stopped.get());
                     getLogger().info(messages.plain("startup.ready"));
                 });
             });

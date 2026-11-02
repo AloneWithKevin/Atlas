@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "nl.pixelretreat"
-version = "0.2.0"
+version = "0.2.1"
 
 repositories {
     mavenCentral()
@@ -74,7 +74,7 @@ tasks.test {
     systemProperty("closetTestSource", providers.gradleProperty("closetTestSource")
             .getOrElse(file("../Closet/content/legacy").absolutePath))
 }
-tasks.processResources { filesMatching("plugin.yml") { expand("version" to project.version) } }
+tasks.processResources { inputs.property("pluginVersion",project.version); filesMatching("plugin.yml") { expand("version" to project.version) } }
 tasks.jar { archiveClassifier.set("plain") }
 tasks.register<Jar>("apiJar") {
     archiveClassifier.set("api")
