@@ -26,7 +26,7 @@ Atlas has no custom blocks, recipes, player rewards or inventory GUI. Portals ma
 
 ## Commands
 
-Players use portals directly. There is no player-facing Atlas menu. If staff sends you to collect a selector from overflow, follow the message and use `/overflow` when you have inventory space. All other `/atlas` management commands are for authorized staff.
+Players use portals directly. For a world configured for visits, use `/atlas visit <world>` (for example, `/atlas visit museum` if staff has configured a world called museum). Visitors explore in Survival mode and cannot build, access containers, or drop and pick up items there. Staff can grant editing access for those worlds. There is no player-facing Atlas menu. If staff sends you to collect a selector from overflow, follow the message and use `/overflow` when you have inventory space. All other `/atlas` management commands are for authorized staff.
 
 ## Frequently asked questions
 

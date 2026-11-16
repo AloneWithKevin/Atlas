@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -77,15 +78,25 @@ public final class AtlasCommand implements TabExecutor {
     private final Plugin plugin;
     private final AtlasMessages messages;
     private final Services services;
+    private final Set<String> visitOnlyWorlds;
 
     public AtlasCommand(Plugin plugin, AtlasMessages messages, Services services) {
+        this(plugin, messages, services, Set.of());
+    }
+
+    public AtlasCommand(Plugin plugin, AtlasMessages messages, Services services, Set<String> visitOnlyWorlds) {
         this.plugin = plugin;
         this.messages = messages;
         this.services = services;
+        this.visitOnlyWorlds = Set.copyOf(visitOnlyWorlds);
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length > 0 && args[0].equalsIgnoreCase("visit") && !visitOnlyWorlds.isEmpty()) {
+            visit(sender, args);
+            return true;
+        }
         if (!sender.isOp() && !sender.hasPermission(ADMIN)) { messages.send(sender, "common.permission"); return true; }
         Services ready = services;
         if (args.length == 0) { messages.send(sender, "help.lines"); return true; }
@@ -252,6 +263,19 @@ public final class AtlasCommand implements TabExecutor {
         });
     }
 
+    private void visit(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            messages.send(sender, "common.players-only");
+            return;
+        }
+        Optional<String> key = args.length == 2 ? WorldNames.key(args[1]).filter(visitOnlyWorlds::contains) : Optional.empty();
+        if (key.isEmpty()) {
+            messages.send(sender, "common.permission");
+            return;
+        }
+        teleportTo(sender, player, services, key.get(), false, () -> visitOnlyWorlds.contains(key.get()));
+    }
+
     private void teleport(CommandSender sender, Services s, String[] args, boolean spawnCommand) {
         boolean unsafe = args.length > 0 && args[args.length - 1].equalsIgnoreCase("--unsafe");
         if (unsafe) args = Arrays.copyOf(args, args.length - 1);
@@ -267,10 +291,14 @@ public final class AtlasCommand implements TabExecutor {
         else { messages.send(sender, "common.players-only"); return; }
         Optional<String> key = args.length >= 1 ? worldKey(sender, args[0]) : Optional.of(RulesService.key(target.getWorld()));
         if (key.isEmpty()) return;
-        World world = loaded(key.get());
-        if (world == null) { messages.send(sender, "common.not-loaded", Map.of("world", WorldNames.shortName(key.get()))); return; }
-        String name = WorldNames.shortName(key.get());
-        java.util.function.BooleanSupplier admission = () -> sender.isOp() || sender.hasPermission(ADMIN);
+        teleportTo(sender, target, s, key.get(), unsafe, () -> sender.isOp() || sender.hasPermission(ADMIN));
+    }
+
+    private void teleportTo(CommandSender sender, Player target, Services s, String key, boolean unsafe,
+                            java.util.function.BooleanSupplier admission) {
+        World world = loaded(key);
+        if (world == null) { messages.send(sender, "common.not-loaded", Map.of("world", WorldNames.shortName(key))); return; }
+        String name = WorldNames.shortName(key);
         var travel = unsafe ? s.teleports().teleportUnsafe(target, world, admission)
                 : s.teleports().teleportDetailed(target, world, Optional.empty(), admission);
         travel.whenComplete((arrived, failure) -> {
@@ -724,11 +752,19 @@ public final class AtlasCommand implements TabExecutor {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         Services ready = services;
-        if ((!sender.isOp() && !sender.hasPermission(ADMIN)) || args.length == 0) return List.of();
-        List<String> worlds = worldNames(ready);
+        if (args.length == 0) return List.of();
         String first = args[0].toLowerCase(Locale.ROOT);
+        if (!visitOnlyWorlds.isEmpty() && args.length == 2 && first.equals("visit") && sender instanceof Player) {
+            return visitOnlyWorlds.stream().map(WorldNames::shortName).sorted()
+                    .filter(name -> name.startsWith(args[1].toLowerCase(Locale.ROOT))).toList();
+        }
+        boolean canVisit = !visitOnlyWorlds.isEmpty() && sender instanceof Player;
+        if (!sender.isOp() && !sender.hasPermission(ADMIN)) {
+            return canVisit && args.length == 1 && "visit".startsWith(first) ? List.of("visit") : List.of();
+        }
+        List<String> worlds = worldNames(ready);
         List<String> options = switch (args.length) {
-            case 1 -> ROOT;
+            case 1 -> canVisit ? java.util.stream.Stream.concat(ROOT.stream(), java.util.stream.Stream.of("visit")).toList() : ROOT;
             case 2 -> switch (first) {
                 case "world" -> WORLD;
                 case "info", "tp", "spawn", "setspawn", "flag", "set" -> worlds;
