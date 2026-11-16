@@ -1,6 +1,6 @@
 # Commands and tab completion
 
-All management commands use `/atlas` and require `atlas.admin`; OP is explicitly admitted. Players normally use portals directly. The Atlas Selector is issued only by staff through `/atlas selector`; its plain-text overflow recovery message tells the recipient to run `/overflow` when inventory space is available. It has no clickable command action.
+All management commands use `/atlas` and require `atlas.admin`; OP is explicitly admitted. Players can use portals directly or run `/atlas visit <world>` for a world listed in `visit-only-worlds`. Visitors use Survival mode and cannot change blocks or access containers. The `atlas.world.visit.edit` permission lets editors keep normal gameplay there. The Atlas Selector is issued only by staff through `/atlas selector`; its plain-text overflow recovery message tells the recipient to run `/overflow` when inventory space is available. It has no clickable command action.
 
 World names contain 1–48 lowercase letters, numbers, underscores or hyphens. World arguments accept the vanilla names `overworld`, `nether`/`the_nether` and `end`/`the_end`, or an Atlas world name/key. Commands run on the local backend; teleport targets are online players on that backend unless the command explicitly describes a cross-server portal destination.
 

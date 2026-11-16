@@ -27,3 +27,6 @@ permissions:
   atlas.world.closed.bypass:
     description: Enter and remain in worlds closed to normal players.
     default: op
+  atlas.world.visit.edit:
+    description: Play normally in configured visit-only Atlas worlds.
+    default: op

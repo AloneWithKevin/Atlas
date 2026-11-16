@@ -6,6 +6,8 @@ server:
   proxy-names:
     Hub01: "Hub01"
     Survival01: "Survival01"
+# Visitors use Survival mode in these Atlas worlds. Give editors atlas.world.visit.edit.
+visit-only-worlds: []
 database:
   host: "127.0.0.1"
   port: 3306

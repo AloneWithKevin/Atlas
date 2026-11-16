@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import nl.pixelretreat.atlas.api.AtlasFlag;
+import nl.pixelretreat.atlas.world.WorldNames;
 import nl.pixelretreat.logbook.client.ProducerLimits;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -54,6 +55,21 @@ public record AtlasConfig(
                         : source.getConfigurationSection("logbook").getValues(false)));
         value.validate();
         return value;
+    }
+
+    /** Empty on installations that have not enabled visit-only protection. */
+    public static Set<String> readVisitOnlyWorlds(FileConfiguration source) {
+        if (!source.contains("visit-only-worlds")) return Set.of();
+        var names = source.getList("visit-only-worlds");
+        if (names == null) throw new IllegalArgumentException("visit-only-worlds must be a list");
+        var keys = new java.util.HashSet<String>();
+        for (Object name : names) {
+            if (!(name instanceof String input)) throw new IllegalArgumentException("Invalid visit-only world");
+            String key = WorldNames.key(input).filter(value -> !WorldNames.builtIn(value))
+                    .orElseThrow(() -> new IllegalArgumentException("Invalid Atlas visit-only world: " + input));
+            if (!keys.add(key)) throw new IllegalArgumentException("Duplicate visit-only world: " + key);
+        }
+        return Set.copyOf(keys);
     }
 
     private static String required(ConfigurationSection source, String key) {

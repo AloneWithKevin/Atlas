@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -26,6 +27,7 @@ import nl.pixelretreat.atlas.listener.PlayerListener;
 import nl.pixelretreat.atlas.listener.PortalListener;
 import nl.pixelretreat.atlas.listener.SelectorListener;
 import nl.pixelretreat.atlas.listener.WorldRulesListener;
+import nl.pixelretreat.atlas.listener.VisitOnlyListener;
 import nl.pixelretreat.atlas.message.AtlasMessages;
 import nl.pixelretreat.atlas.message.BootstrapMessages;
 import nl.pixelretreat.atlas.service.AtlasWorkers;
@@ -66,6 +68,7 @@ public final class AtlasPlugin extends JavaPlugin {
     private final AtomicBoolean stopped = new AtomicBoolean();
     private final AtomicBoolean failed = new AtomicBoolean();
     private volatile AtlasConfig config;
+    private Set<String> visitOnlyWorlds = Set.of();
     private volatile HikariDataSource database;
     private volatile AtlasRepository repository;
     private volatile Path levelFolder;
@@ -94,8 +97,9 @@ public final class AtlasPlugin extends JavaPlugin {
         try {
             bootstrapFailure = BootstrapMessages.startupFailure(getResource("messages.yml"));
             ensureResource("config.yml");
-            AtlasConfig settings = AtlasConfig.read(YamlConfiguration.loadConfiguration(
-                    getDataFolder().toPath().resolve("config.yml").toFile()));
+            var yaml = YamlConfiguration.loadConfiguration(getDataFolder().toPath().resolve("config.yml").toFile());
+            AtlasConfig settings = AtlasConfig.read(yaml);
+            visitOnlyWorlds = AtlasConfig.readVisitOnlyWorlds(yaml);
             BootstrapIdentityGuard.requireMatch(
                     getServer().getServicesManager().load(PostboxBootstrapIdentity.class), settings.serverId());
             config = settings;
@@ -168,6 +172,9 @@ public final class AtlasPlugin extends JavaPlugin {
         workers = new AtlasWorkers(settings.workerThreads(), settings.workerQueueSize());
         RulesService rules = new RulesService(this, repository, workers, settings);
         getServer().getPluginManager().registerEvents(new WorldRulesListener(rules), this);
+        if (!visitOnlyWorlds.isEmpty()) {
+            getServer().getPluginManager().registerEvents(new VisitOnlyListener(visitOnlyWorlds), this);
+        }
         getServer().getAsyncScheduler().runNow(this, ignored -> {
             try {
                 ensureResource("messages.yml");
@@ -327,7 +334,7 @@ public final class AtlasPlugin extends JavaPlugin {
                     getServer().getServicesManager().register(AtlasRules.class, rules, this, ServicePriority.Normal);
                     AtlasCommand command = new AtlasCommand(this, messages, new AtlasCommand.Services(settings, rules,
                             worlds, teleports, portals, regions, selections, (requester, player) -> selectors.request(player, requester),
-                            () -> reloadAll(rules, portals, regions), statistics));
+                            () -> reloadAll(rules, portals, regions), statistics), visitOnlyWorlds);
                     Objects.requireNonNull(getCommand("atlas")).setExecutor(command);
                     Objects.requireNonNull(getCommand("atlas")).setTabCompleter(command);
                     for (Player online : getServer().getOnlinePlayers()) {
