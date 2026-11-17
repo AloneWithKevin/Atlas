@@ -1,0 +1,50 @@
+{
+  "campfireApiJar": {
+    "file": "campfireApiJar-69e955161fea-69e955161fea.jar",
+    "sha256": "69e955161feaddf6e4d111f00726745a41c283d22cb3a7ac12bd83df7dd06985"
+  },
+  "closetApiJar": {
+    "file": "closetApiJar-20112f29cdf1-20112f29cdf1.jar",
+    "sha256": "20112f29cdf1c861accd3bcf9974914b1ca639f141b92cdf1807a519a5a00a42"
+  },
+  "postboxApiJar": {
+    "file": "postboxApiJar-e6d6a0703b4e-e6d6a0703b4e.jar",
+    "sha256": "e6d6a0703b4e16d9907f490b6d7be72eb150950bba74db6f6ac0d9ae04ac75c6"
+  },
+  "campfireFixtureJar": {
+    "file": "campfireFixtureJar-633d6d9f60f9-633d6d9f60f9.jar",
+    "sha256": "633d6d9f60f9c6d39af62bec10ba84b7e0b252e7c8099acac7b0fa03643e96d8"
+  },
+  "closetFixtureJar": {
+    "file": "closetFixtureJar-cd65d85137f5-cd65d85137f5.jar",
+    "sha256": "cd65d85137f5d3d43887cbdf685921cc493a66ff57f7121f79cca981c3eca0d0"
+  },
+  "compassApiJar": {
+    "file": "compassApiJar-d50f202107bc-d50f202107bc.jar",
+    "sha256": "d50f202107bc3ed2d42e6330091aaf1401f84fa9ea9ae74ea2eb30683b7883f5"
+  },
+  "controllerApiJar": {
+    "file": "controllerApiJar-cb6e108a985f-cb6e108a985f.jar",
+    "sha256": "cb6e108a985fdc058d7e5040847d471072c4b5fafa090b9c8d87405c7a8d76d6"
+  },
+  "veyraApiJar": {
+    "file": "veyraApiJar-d4ace7d07f63-d4ace7d07f63.jar",
+    "sha256": "d4ace7d07f63f882b546e634d3f28c16c4869acf11b18653896ed181b5fca6c3"
+  },
+  "foliaApiJar": {
+    "file": "foliaApiJar-4303822f3cd2-4303822f3cd2.jar",
+    "sha256": "4303822f3cd2fa2c21e530163929d864b1a073e53e903b875ef216d74bdfa847"
+  },
+  "logbookApiJar": {
+    "file": "api-0.1.0-b26404d5a279.jar",
+    "sha256": "b26404d5a2796f942a0f91e12c5434728978781c771f6ecf3fc79ec04009d723"
+  },
+  "logbookClientJar": {
+    "file": "client-0.1.0-1d01c1e02497.jar",
+    "sha256": "1d01c1e02497c1fec3bb872d5aa85208adee007fd7ee3863862bf3c402b45bab"
+  },
+  "logbookCoreJar": {
+    "file": "core-0.1.0-834b63a87178.jar",
+    "sha256": "834b63a871787a06638b469dacb0fa9c54f306437a0e3e8f4bc26a93ee8dc107"
+  }
+}

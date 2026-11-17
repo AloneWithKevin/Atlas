@@ -4,3 +4,4 @@ out/
 *.log
 config.local.yml
 !src/main/resources/config.yml
+/build-inputs/
