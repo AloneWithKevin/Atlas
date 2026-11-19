@@ -5,18 +5,82 @@ import static org.mockito.Mockito.*;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import nl.pixelretreat.atlas.api.AtlasTeleportObserver;
 import nl.pixelretreat.atlas.world.SpawnPoint;
+import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.RegisteredServiceProvider;
+import org.bukkit.plugin.ServicePriority;
 import io.papermc.paper.threadedregions.scheduler.EntityScheduler;
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.junit.jupiter.api.Test;
 
 class TeleportServiceTest {
+    @Test void localCrossWorldDepartureReportsOnlyProvenNativeArrival() {
+        var plugin = mock(Plugin.class, RETURNS_DEEP_STUBS);
+        var toolbox = mock(Plugin.class);
+        when(toolbox.getName()).thenReturn("Toolbox");
+        when(toolbox.isEnabled()).thenReturn(true);
+        var player = mock(Player.class, RETURNS_DEEP_STUBS);
+        when(player.isOnline()).thenReturn(true);
+        when(player.getScheduler().run(any(), any(), any())).thenAnswer(call -> {
+            call.<Consumer<ScheduledTask>>getArgument(1).accept(mock(ScheduledTask.class));
+            return mock(ScheduledTask.class);
+        });
+        var from = mock(World.class);
+        var to = mock(World.class);
+        when(player.getWorld()).thenReturn(from);
+        when(player.getLocation()).thenReturn(new Location(from, 14.5, 64, 17, 30, 4));
+        var observation = new AtomicReference<CompletionStage<Boolean>>();
+        AtlasTeleportObserver observer = (original, arrival) -> {
+            assertSame(player, original);
+            assertSame(from, original.getWorld());
+            observation.set(arrival);
+        };
+        when(plugin.getServer().getServicesManager().getRegistration(AtlasTeleportObserver.class))
+                .thenReturn(new RegisteredServiceProvider<>(AtlasTeleportObserver.class, observer, ServicePriority.Normal, toolbox));
+        var moved = new AtomicReference<CompletableFuture<Boolean>>();
+        when(player.teleportAsync(any(Location.class), eq(TeleportCause.PLUGIN))).thenAnswer(call -> {
+            var pending = new CompletableFuture<Boolean>();
+            moved.set(pending);
+            return pending;
+        });
+        var service = new TeleportService(plugin, null, null);
+        var destination = Optional.of(new SpawnPoint(1, 64, 1, 0, 0));
+        var arrival = service.teleportLocal(player, to, destination, () -> true);
+        assertFalse(observation.get().toCompletableFuture().isDone());
+        moved.get().complete(true);
+        assertEquals(TeleportService.Outcome.ARRIVED, arrival.join());
+        assertTrue(observation.get().toCompletableFuture().join());
+
+        var refused = service.teleportLocal(player, to, destination, () -> true);
+        moved.get().complete(false);
+        assertEquals(TeleportService.Outcome.NOT_PERFORMED, refused.join());
+        assertFalse(observation.get().toCompletableFuture().join());
+
+        var uncertain = service.teleportLocal(player, to, destination, () -> true);
+        moved.get().completeExceptionally(new IllegalStateException("lost reply"));
+        assertEquals(TeleportService.Outcome.UNKNOWN, uncertain.join());
+        assertFalse(observation.get().toCompletableFuture().join());
+
+        observation.set(null);
+        var sameWorld = service.teleportLocal(player, from, destination, () -> true);
+        moved.get().complete(true);
+        assertEquals(TeleportService.Outcome.ARRIVED, sameWorld.join());
+        assertNull(observation.get());
+        var internal = service.teleportDetailed(player, to, destination, () -> true);
+        moved.get().complete(true);
+        assertEquals(TeleportService.Outcome.ARRIVED, internal.join());
+        assertNull(observation.get());
+    }
+
     @Test void unsafeUsesNativeSpawnWithoutGroundSearchButRechecksAdmission() {
         var player = mock(Player.class);
         when(player.isOnline()).thenReturn(true);

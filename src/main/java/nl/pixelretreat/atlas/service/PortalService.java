@@ -229,7 +229,7 @@ public final class PortalService {
             }
             boolean scheduled = player.getScheduler().run(plugin, task -> {
                 if (!player.isOnline() || !authorized(player, portal)) { finish(operation, "not_performed", Travel.FAILED, result); return; }
-                teleports.teleportDetailed(player, world, target.point(), () -> authorized(player, portal)).whenComplete((outcome, failure) -> {
+                teleports.teleportLocal(player, world, target.point(), () -> authorized(player, portal)).whenComplete((outcome, failure) -> {
                     if (failure != null || outcome == TeleportService.Outcome.UNKNOWN) {
                         unresolved(operation, "teleport_result_unknown");
                         result.complete(Travel.FAILED);
@@ -291,21 +291,33 @@ public final class PortalService {
         var pending=new Preparing(original,new CompletableFuture<>());known=preparing.putIfAbsent(plan.id(),pending);
         if(known!=null)return known.original()==original?known.result():CompletableFuture.completedStage(InventoryTransferApi.Preparation.UNKNOWN);
         pending.result().whenComplete((v,f)->preparing.remove(plan.id(),pending));
-        bindings.capture(original).thenCompose(bound->{
-            if(bound.isEmpty()||!bound.get().connection().session().filter(plan.session()::equals).isPresent()
-                ||!bound.get().connection().backend().filter(b->b.serverName().equals(plan.targetBackend())).isPresent())
+        var movementDeadline = new java.util.concurrent.atomic.AtomicLong();
+        transfers.destinationBinding(plugin,plan,original).thenCompose(bound->{
+            if(bound.isEmpty())
                 return CompletableFuture.<Optional<AtlasRepository.TransferArrival>>completedStage(Optional.empty());
-            return workers.submit(()->repository.claimTransferArrival(plan));
+            java.util.concurrent.CompletionStage<Long> budget;
+            try { budget=transfers.movementDeadline(plugin,plan.id(),plan.player()); }
+            catch (NoSuchMethodError legacy) { budget=CompletableFuture.completedStage(System.nanoTime()+15_000_000_000L); }
+            return budget.thenCompose(deadline -> {
+                movementDeadline.set(deadline);
+                return workers.submit(()->repository.claimTransferArrival(plan));
+            });
         }).whenComplete((arrival,failure)->{
             if(failure!=null||arrival.isEmpty()){pending.result().complete(InventoryTransferApi.Preparation.UNKNOWN);return;}
             var claimed=arrival.get();
             if(java.util.Set.of("ARRIVED","NOT_MOVED").contains(claimed.phase())){pending.result().complete(InventoryTransferApi.Preparation.READY);return;}
             if(!claimed.claimed()){pending.result().complete(InventoryTransferApi.Preparation.UNKNOWN);return;}
+            var dispatched=new java.util.concurrent.atomic.AtomicBoolean();
+            Runnable retired=()->{
+                if(dispatched.compareAndSet(false,true)) persistPreparedOutcome(plan,pending,false);
+            };
+            try {
             if(original.getScheduler().run(plugin,task->{
-                if(closed||!plugin.isEnabled()||!original.isOnline()||plugin.getServer().getPlayer(plan.player())!=original){pending.result().complete(InventoryTransferApi.Preparation.UNKNOWN);return;}
+                if(!dispatched.compareAndSet(false,true))return;
+                if(closed||!plugin.isEnabled()||!original.isOnline()||plugin.getServer().getPlayer(plan.player())!=original){persistPreparedOutcome(plan,pending,false);return;}
                 var ticket=claimed.ticket();var world=plugin.getServer().getWorld(NamespacedKey.fromString(ticket.world()));
                 if(world==null||!(original.isOp()||original.hasPermission("atlas.portal.use"))){preparedOutcome(plan,pending,false);return;}
-                teleports.teleportDetailed(original,world,ticket.point(),()->!closed&&original.isOnline()&&plugin.getServer().getPlayer(plan.player())==original
+                teleports.teleportDetailed(original,world,ticket.point(),()->System.nanoTime()-movementDeadline.get()<0 && !closed&&original.isOnline()&&plugin.getServer().getPlayer(plan.player())==original
                     &&(original.isOp()||original.hasPermission("atlas.portal.use"))).whenComplete((outcome,teleportFailure)->{
                     if(teleportFailure!=null||outcome==null||outcome==TeleportService.Outcome.UNKNOWN){pending.result().complete(InventoryTransferApi.Preparation.UNKNOWN);return;}
                     if(outcome==TeleportService.Outcome.NOT_PERFORMED){preparedOutcome(plan,pending,false);return;}
@@ -317,12 +329,19 @@ public final class PortalService {
                         });
                     }catch(RuntimeException unavailable){pending.result().complete(InventoryTransferApi.Preparation.UNKNOWN);}
                 });
-            },()->pending.result().complete(InventoryTransferApi.Preparation.UNKNOWN))==null)pending.result().complete(InventoryTransferApi.Preparation.UNKNOWN);
+            },retired)==null)retired.run();
+            } catch(RuntimeException failureToSchedule) {
+                if(dispatched.get())pending.result().complete(InventoryTransferApi.Preparation.UNKNOWN);
+                else retired.run();
+            }
         });
         return pending.result();
     }
     private void preparedOutcome(TransferPlan plan,Preparing pending,boolean moved) {
         if(!moved)messages.send(pending.original(),"portal.arrival-failed");
+        persistPreparedOutcome(plan,pending,moved);
+    }
+    private void persistPreparedOutcome(TransferPlan plan,Preparing pending,boolean moved) {
         workers.submit(()->{
             if(!repository.finishTransferArrival(plan,moved))return false;
             repository.finishPortalTrip(plan.id(),moved?"arrived":"not_performed");return true;

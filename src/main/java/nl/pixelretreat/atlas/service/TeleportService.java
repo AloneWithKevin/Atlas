@@ -2,6 +2,8 @@ package nl.pixelretreat.atlas.service;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+import nl.pixelretreat.atlas.api.AtlasTeleportObserver;
 import nl.pixelretreat.atlas.config.AtlasConfig;
 import nl.pixelretreat.atlas.world.RulesSnapshot;
 import nl.pixelretreat.atlas.world.SpawnPoint;
@@ -24,6 +26,7 @@ public final class TeleportService {
     private final Plugin plugin;
     private final RulesService rules;
     private final AtlasConfig config;
+    private final AtomicBoolean observationWarning = new AtomicBoolean();
 
     public TeleportService(Plugin plugin, RulesService rules, AtlasConfig config) {
         this.plugin = plugin;
@@ -43,7 +46,7 @@ public final class TeleportService {
         Location destination = storedSpawn(world)
                 .map(spawn -> new Location(world, spawn.x(), spawn.y(), spawn.z(), spawn.yaw(), spawn.pitch()))
                 .orElseGet(world::getSpawnLocation);
-        move(player, destination, result, admission);
+        move(player, destination, result, admission, true);
         return result;
     }
 
@@ -55,11 +58,23 @@ public final class TeleportService {
     /** Rechecks the original caller's admission on the entity owner immediately before teleport. */
     public CompletableFuture<Outcome> teleportDetailed(Player player, World world, Optional<SpawnPoint> point,
                                                         java.util.function.BooleanSupplier admission) {
+        return teleportDetailed(player, world, point, admission, false);
+    }
+
+    /** Local player or staff travel that may supply a departure for Toolbox's back history. */
+    public CompletableFuture<Outcome> teleportLocal(Player player, World world, Optional<SpawnPoint> point,
+                                                    java.util.function.BooleanSupplier admission) {
+        return teleportDetailed(player, world, point, admission, true);
+    }
+
+    private CompletableFuture<Outcome> teleportDetailed(Player player, World world, Optional<SpawnPoint> point,
+                                                         java.util.function.BooleanSupplier admission, boolean trackDeparture) {
         CompletableFuture<Outcome> result = new CompletableFuture<>();
         Optional<SpawnPoint> exact = point.isPresent() ? point : storedSpawn(world);
         if (exact.isPresent()) {
             SpawnPoint spawn = exact.get();
-            move(player, new Location(world, spawn.x(), spawn.y(), spawn.z(), spawn.yaw(), spawn.pitch()), result, admission);
+            move(player, new Location(world, spawn.x(), spawn.y(), spawn.z(), spawn.yaw(), spawn.pitch()),
+                    result, admission, trackDeparture);
             return result;
         }
         Location spawn = world.getSpawnLocation();
@@ -70,7 +85,7 @@ public final class TeleportService {
             plugin.getServer().getRegionScheduler().run(plugin, world, chunkX, chunkZ, task -> {
                 Location safe = safeSpot(world, spawn, config.safeSearchRadius());
                 if (safe == null) { result.complete(Outcome.NOT_PERFORMED); return; }
-                move(player, safe, result, admission);
+                move(player, safe, result, admission, trackDeparture);
             });
         });
         return result;
@@ -82,21 +97,52 @@ public final class TeleportService {
     }
 
     private void move(Player player, Location destination, CompletableFuture<Outcome> result,
-                      java.util.function.BooleanSupplier admission) {
+                      java.util.function.BooleanSupplier admission, boolean trackDeparture) {
         boolean scheduled = player.getScheduler().run(plugin, task -> {
             if (!player.isOnline() || !admission.getAsBoolean()) { result.complete(Outcome.NOT_PERFORMED); return; }
+            CompletableFuture<Boolean> observed = null;
             try {
                 var event=new PlayerTeleportEvent(player,player.getLocation(),destination.clone(),PlayerTeleportEvent.TeleportCause.PLUGIN);
                 plugin.getServer().getPluginManager().callEvent(event);
                 if(event.isCancelled()||!destination.equals(event.getTo())){result.complete(Outcome.NOT_PERFORMED);return;}
                 if (player.isInsideVehicle()) player.leaveVehicle();
                 if (!player.getPassengers().isEmpty()) player.eject();
+                if (trackDeparture && player.getWorld() != destination.getWorld())
+                    observed = observeDeparture(player);
+                CompletableFuture<Boolean> originalObservation = observed;
+                if (!admission.getAsBoolean()) {
+                    if (originalObservation != null) originalObservation.complete(false);
+                    result.complete(Outcome.NOT_PERFORMED);
+                    return;
+                }
                 player.teleportAsync(destination, PlayerTeleportEvent.TeleportCause.PLUGIN)
-                        .whenComplete((success, error) -> result.complete(error != null ? Outcome.UNKNOWN
-                                : Boolean.TRUE.equals(success) ? Outcome.ARRIVED : Outcome.NOT_PERFORMED));
-            } catch (RuntimeException uncertain) { result.complete(Outcome.UNKNOWN); }
+                        .whenComplete((success, error) -> {
+                            Outcome outcome = error != null ? Outcome.UNKNOWN
+                                    : Boolean.TRUE.equals(success) ? Outcome.ARRIVED : Outcome.NOT_PERFORMED;
+                            if (originalObservation != null) originalObservation.complete(outcome == Outcome.ARRIVED);
+                            result.complete(outcome);
+                        });
+            } catch (RuntimeException uncertain) {
+                if (observed != null) observed.complete(false);
+                result.complete(Outcome.UNKNOWN);
+            }
         }, () -> result.complete(Outcome.NOT_PERFORMED)) != null;
         if (!scheduled) result.complete(Outcome.NOT_PERFORMED);
+    }
+
+    private CompletableFuture<Boolean> observeDeparture(Player player) {
+        var observer = plugin.getServer().getServicesManager().getRegistration(AtlasTeleportObserver.class);
+        if (observer == null || !"Toolbox".equals(observer.getPlugin().getName()) || !observer.getPlugin().isEnabled())
+            return null;
+        var arrived = new CompletableFuture<Boolean>();
+        try {
+            observer.getProvider().departing(player, arrived.minimalCompletionStage());
+        } catch (RuntimeException failure) {
+            arrived.complete(false);
+            if (observationWarning.compareAndSet(false, true))
+                plugin.getLogger().warning("Toolbox could not record the Atlas departure (" + failure.getClass().getSimpleName() + ")");
+        }
+        return arrived;
     }
 
     /**

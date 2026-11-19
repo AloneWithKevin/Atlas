@@ -300,7 +300,7 @@ public final class AtlasCommand implements TabExecutor {
         if (world == null) { messages.send(sender, "common.not-loaded", Map.of("world", WorldNames.shortName(key))); return; }
         String name = WorldNames.shortName(key);
         var travel = unsafe ? s.teleports().teleportUnsafe(target, world, admission)
-                : s.teleports().teleportDetailed(target, world, Optional.empty(), admission);
+                : s.teleports().teleportLocal(target, world, Optional.empty(), admission);
         travel.whenComplete((arrived, failure) -> {
             if (failure != null || arrived != TeleportService.Outcome.ARRIVED) {
                 messages.send(sender, "teleport.failed", Map.of("world", name));

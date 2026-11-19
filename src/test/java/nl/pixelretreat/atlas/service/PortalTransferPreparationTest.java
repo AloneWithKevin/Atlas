@@ -26,6 +26,7 @@ class PortalTransferPreparationTest {
         "Hub01","FixtureHub",UUID.randomUUID(),"Survival01","FixtureSurvival");
     final TravelTicket ticket=new TravelTicket(plan.id(),playerId,"original","atlas:original",Optional.of(new SpawnPoint(4,70,8,0,0)));
     final AtlasRepository repository=mock(AtlasRepository.class);
+    final InventoryTransferApi transfers=mock(InventoryTransferApi.class);
     final BoundConnectionsApi bindings=mock(BoundConnectionsApi.class);
     final TeleportService teleports=mock(TeleportService.class);
     final CompletableFuture<TeleportService.Outcome> movement=new CompletableFuture<>();
@@ -37,13 +38,25 @@ class PortalTransferPreparationTest {
         when(player.hasPermission("atlas.portal.use")).thenReturn(true);when(plugin.getServer().getPlayer(playerId)).thenReturn(player);
         when(plugin.getServer().getWorld(any(NamespacedKey.class))).thenReturn(world);
         when(player.getScheduler().run(eq(plugin),any(),any())).thenAnswer(a->{a.<java.util.function.Consumer<io.papermc.paper.threadedregions.scheduler.ScheduledTask>>getArgument(1).accept(mock(io.papermc.paper.threadedregions.scheduler.ScheduledTask.class));return mock(io.papermc.paper.threadedregions.scheduler.ScheduledTask.class);});
-        var connection=new PlayerConnection(new KnownPlayer(playerId,"Fixture"),PlayerConnection.Status.ONLINE,Optional.of(plan.session()),
+        var connection=new PlayerConnection(new KnownPlayer(playerId,"Fixture"),PlayerConnection.Status.ONLINE,Optional.of(new PlayerConnection.Session(UUID.randomUUID(),UUID.randomUUID())),
             Optional.of(new PlayerConnection.Backend(plan.targetBackend(),UUID.randomUUID())),Instant.now(),Optional.empty());
-        when(bindings.capture(player)).thenReturn(CompletableFuture.completedStage(Optional.of(new BoundConnection(UUID.randomUUID(),UUID.randomUUID(),connection,Instant.now()))));
+        when(transfers.movementDeadline(plugin,plan.id(),plan.player())).thenAnswer(call->CompletableFuture.completedStage(System.nanoTime()+15_000_000_000L));
+        when(transfers.destinationBinding(plugin,plan,player)).thenReturn(CompletableFuture.completedStage(Optional.of(new BoundConnection(UUID.randomUUID(),UUID.randomUUID(),connection,Instant.now()))));
         when(repository.claimTransferArrival(plan)).thenReturn(Optional.of(new AtlasRepository.TransferArrival(ticket,"ARRIVING",true)));
         when(repository.finishTransferArrival(eq(plan),anyBoolean())).thenReturn(true);
         when(teleports.teleportDetailed(eq(player),eq(world),eq(ticket.point()),any())).thenReturn(movement);
-        service=new PortalService(plugin,repository,workers,null,teleports,mock(AtlasMessages.class));service.transfers(mock(InventoryTransferApi.class),bindings,checkpoints);
+        service=new PortalService(plugin,repository,workers,null,teleports,mock(AtlasMessages.class));service.transfers(transfers,bindings,checkpoints);
+    }
+    @Test void retiredBeforeDispatchLeavesAProvenUnmovedArrival()throws Exception {
+        when(player.getScheduler().run(eq(plugin),any(),any())).thenAnswer(call->{call.<Runnable>getArgument(2).run();return null;});
+        assertEquals(InventoryTransferApi.Preparation.READY,service.prepareArrival(plan,player).toCompletableFuture().get(5,TimeUnit.SECONDS));
+        verify(repository).finishTransferArrival(plan,false);verifyNoInteractions(teleports);
+    }
+    @Test void unconfirmedVisitCannotClaimOrMoveThePlayer()throws Exception {
+        when(transfers.destinationBinding(plugin,plan,player)).thenReturn(CompletableFuture.completedStage(Optional.empty()));
+        assertEquals(InventoryTransferApi.Preparation.UNKNOWN,service.prepareArrival(plan,player).toCompletableFuture().get(5,TimeUnit.SECONDS));
+        verify(repository,never()).claimTransferArrival(any());
+        verify(bindings,never()).capture(any());
     }
     @AfterEach void close(){service.close();workers.close();}
     @Test void aStaleUnboundLegacyTicketCannotAddASecondJoinTeleport()throws Exception {
